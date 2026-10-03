@@ -88,7 +88,7 @@ kubectl wait \
 
 ### Creare GatewayClass e Gateway KServe
 
-I comandi seguenti assumono che ci si trovi nella directory `kserve_local` del progetto.
+I comandi seguenti assumono che ci si trovi nella directory `kserve` del progetto.
 Spostarsi in quella directory o copiarla nella propria directory home (ad esempio per WSL Ubuntu).
 
 Creare il Gateway HTTP che KServe userà per associare le proprie `HTTPRoute`.

@@ -86,7 +86,7 @@ kubectl delete namespace mlops-iris-inference
 
 ## Inference Service
 
-The following commands assume that you are in the `kserve_local` directory of the project.
+The following commands assume that you are in the `kserve` directory of the project.
 Change location to that directory or copy that to your home directory (e.g. for WSL Ubuntu).
 
 ```bash
