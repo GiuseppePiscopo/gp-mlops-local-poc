@@ -1,0 +1,13 @@
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: sklearn-iris
+  namespace: mlops-iris-inference
+spec:
+  predictor:
+    model:
+      runtime: kserve-sklearnserver
+      modelFormat:
+        name: sklearn
+      protocolVersion: v2
+      storageUri: gs://kfserving-examples/models/sklearn/1.0/model
