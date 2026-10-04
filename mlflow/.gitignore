@@ -1,0 +1,18 @@
+# Local environment variables and secrets
+.env
+
+# Local Docker Compose override files
+compose.override.yaml
+compose.override.yml
+
+# Local bind-mounted runtime data
+local-data/
+postgres-data/
+object-store-data/
+
+# Logs and temporary files
+*.log
+tmp/
+
+# Runtime object-store credentials
+object-store/s3.json
