@@ -1,0 +1,33 @@
+{
+  "files.exclude": {
+    "**/node_modules": true,
+    "**/.ruff_cache": true,
+    "**/__pycache__": true,
+    "**/.venv": true,
+    "**/mlflow.db": true
+  },
+  "python.terminal.activateEnvironment": false,
+  "python.defaultInterpreterPath": "C:/Program Files/Python313/python.exe",
+  "python.terminal.useEnvFile": true,
+  "python.envFile": "${workspaceFolder}/.env.local",
+  "ruff.nativeServer": "on",
+  "ruff.configurationPreference": "filesystemFirst",
+  "ruff.configuration": null,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.ruff": "explicit",
+    "source.organizeImports.ruff": "explicit"
+  },
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.formatOnSave": true
+  },
+  "[yaml]": {
+    "editor.formatOnSave": false,
+    "editor.codeActionsOnSave": {
+      "source.fixAll.ruff": "never",
+      "source.organizeImports.ruff": "never"
+    }
+  },
+  "notebook.output.wordWrap": true,
+  "notebook.formatOnSave.enabled": true
+}

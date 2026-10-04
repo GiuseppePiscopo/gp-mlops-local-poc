@@ -1,0 +1,39 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Ruff: check",
+			"type": "shell",
+			"command": "ruff",
+			"args": [
+				"check",
+				"--config",
+				"pyproject.toml"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "Ruff: fix",
+			"type": "shell",
+			"command": "ruff",
+			"args": [
+				"check",
+				"--fix",
+				"--config",
+				"pyproject.toml"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "Ruff: format",
+			"type": "shell",
+			"command": "ruff",
+			"args": [
+				"format",
+				"--config",
+				"pyproject.toml"
+			],
+			"isBackground": false
+		}
+	]
+}
