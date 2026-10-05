@@ -194,6 +194,10 @@ def main(args: argparse.Namespace) -> None:
             name=MODEL_ARTIFACT_NAME,
             signature=signature,
             input_example=input_example,
+            serialization_format=mlflow.sklearn.SERIALIZATION_FORMAT_SKOPS,
+            skops_trusted_types=[
+                "sklearn.tree._tree.Tree",
+            ],
             registered_model_name=args.registered_model_name,
         )
 
