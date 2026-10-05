@@ -214,20 +214,16 @@ Ogni training completato con successo produce una nuova model version.
 
 ## Verifica del modello registrato
 
-`src/random_forest/verify_registered_model.py` è uno smoke test che dimostra il recupero end-to-end di una model version dal Registry: risolve un alias MLflow (es. `@candidate` o `@champion`), scarica l'artefatto dall'object storage, lo carica con `mlflow.sklearn.load_model()` ed esegue una predizione su alcune righe del CSV.
+`src/random_forest/verify_registered_model.py` è uno smoke test che dimostra il recupero end-to-end di una model version dal Registry: risolve un alias MLflow (es. `@candidate` o `@champion`), scarica l'artefatto e lo carica con `mlflow.sklearn.load_model()`, quindi esegue una predizione su alcune righe del CSV.
 
-A differenza del training, il verifier scarica l'artefatto del modello direttamente dall'object storage S3-compatible, senza passare dal proxy del Tracking Server. Per questo il container riceve anche l'endpoint e le credenziali di SeaweedFS, non solo `MLFLOW_TRACKING_URI`.
+Il container riceve solo `MLFLOW_TRACKING_URI`, come il training. Non servono endpoint o credenziali di SeaweedFS: l'artifact root di questo Tracking Server è configurato con lo schema proxy `mlflow-artifacts:/` (flag `--artifacts-destination` sul server MLflow), quindi il client scarica il modello via HTTP dal Tracking Server stesso, che internamente inoltra la richiesta a SeaweedFS usando le proprie credenziali. Il client non parla mai direttamente con l'object storage.
 
-Esempio di esecuzione, con la stessa rete Docker, gli stessi endpoint MLflow/S3 e lo stesso mount dati usati nel training:
+Esempio di esecuzione, con la stessa rete Docker e lo stesso mount dati usati nel training:
 
 ```bash
 docker run --rm \
   --network mlops-local-network \
   -e MLFLOW_TRACKING_URI=http://mlflow:5000 \
-  -e MLFLOW_S3_ENDPOINT_URL=http://seaweedfs:8333 \
-  -e AWS_ACCESS_KEY_ID=admin \
-  -e AWS_SECRET_ACCESS_KEY=admin \
-  -e AWS_DEFAULT_REGION=us-east-1 \
   -v /opt/mlops-local-poc/training/data:/data:ro \
   --entrypoint python \
   gp-mof-capstone-training:dev \
