@@ -1,3 +1,13 @@
+"""Trains a RandomForestRegressor on the Seoul Bike Sharing dataset and logs the run
+to the MLflow Tracking Server: hyperparameters, dataset/provenance tags, evaluation
+metrics, the model signature and a new version of the model in the Model Registry.
+
+The container only needs `MLFLOW_TRACKING_URI`, not SeaweedFS endpoint or
+credentials: the Tracking Server's artifact root uses the `mlflow-artifacts:`
+proxy scheme, so the client uploads the model over HTTP to the Tracking Server
+itself, which forwards the request to SeaweedFS using its own credentials.
+"""
+
 import argparse
 import hashlib
 import os

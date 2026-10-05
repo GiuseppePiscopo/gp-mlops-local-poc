@@ -1,5 +1,17 @@
 #!/usr/bin/env python3
 
+"""Launcher that validates inputs and runs the training container with `docker run`.
+
+This script runs from the WSL operational copy of `training/` (no `.git/` there), so
+the authoritative Git working tree is passed explicitly via `--git-repository` /
+`GIT_REPOSITORY`. Before invoking Docker, it checks that the dataset CSV exists, that
+the Docker image was already built, and that the given path is a valid Git working
+tree; it then reads the current commit, remote URL and dirty state from that
+repository and forwards them to the training container as MLflow run tags. Any
+failed check raises `PreRunValidationError` and exits with status 2 without
+starting Docker.
+"""
+
 import argparse
 import os
 import shlex

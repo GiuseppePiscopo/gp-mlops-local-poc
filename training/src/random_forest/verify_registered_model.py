@@ -1,3 +1,10 @@
+"""Smoke test that resolves a registered model version from the MLflow Model
+Registry (by alias, by default `@candidate`), downloads and loads it with
+`mlflow.sklearn.load_model()`, and runs a prediction on a few preprocessed rows
+of the training CSV. It demonstrates that a model registered by `train.py` is
+actually retrievable and usable through its Registry reference.
+"""
+
 import argparse
 import os
 
@@ -41,6 +48,11 @@ def main(args: argparse.Namespace) -> None:
     df = get_data(args.training_data)
     _, X_test, _, _ = prepare_data(df)
 
+    # mlflow.sklearn.load_model only needs MLFLOW_TRACKING_URI, not SeaweedFS
+    # endpoint or credentials: the registered model's artifact location uses the
+    # `mlflow-artifacts:` proxy scheme, so the download happens over HTTP against
+    # the Tracking Server itself, which forwards the request to SeaweedFS using
+    # its own credentials. The client never talks to the object store directly.
     model = mlflow.sklearn.load_model(args.model_uri)
 
     input_rows = X_test.head(args.rows)

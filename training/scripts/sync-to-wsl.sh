@@ -42,7 +42,6 @@ Only these static sources are synchronized:
   - Dockerfile
   - .dockerignore
   - .gitignore
-  - README.md
   - requirements.txt
 
 The target data/ directory is deliberately never copied, deleted or modified.
@@ -97,7 +96,6 @@ required_files=(
   "Dockerfile"
   ".dockerignore"
   ".gitignore"
-  "README.md"
   "requirements.txt"
 )
 
