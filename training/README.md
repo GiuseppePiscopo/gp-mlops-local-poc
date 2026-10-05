@@ -81,21 +81,31 @@ Training container:
 
 ## Provenance Git
 
-`run_training.py` recupera automaticamente:
+La copia Linux sotto `/opt/mlops-local-poc/training/` è un build workspace e non contiene il repository Git completo.
 
-- commit Git corrente
-- URL del remote Git
-- stato dirty/clean della working tree
+Il repository Git autorevole resta il checkout Windows/Bitbucket, normalmente accessibile da WSL sotto `/mnt/c/...`.
 
-Per questo motivo il launcher deve essere eseguito da una copia reale del repository Git, cioè una directory che contenga `.git/`.
+Il launcher riceve esplicitamente il percorso del repository autorevole tramite:
 
-La copia runtime sotto `/opt/mlops-local-poc/training/data/` non è un checkout Git e non deve contenere il codice sorgente.
+```text
+--git-repository
+```
 
-Il repository Git può essere:
+oppure tramite la variabile d'ambiente:
 
-- il checkout Windows accessibile da WSL, ad esempio sotto `/mnt/c/...`;
-- un checkout Git completo in una directory WSL separata;
-- un altro working copy Git valido.
+```text
+GIT_REPOSITORY
+```
+
+Prima di eseguire Docker, il launcher verifica che il percorso sia una working tree Git valida e rileva:
+
+- commit Git corrente;
+- URL del remote `origin`;
+- stato `dirty` o `clean` della working tree.
+
+Questi valori vengono inoltrati al training container e registrati come MLflow tags.
+
+Il launcher non accetta run privi di provenance Git valida.
 
 ## Build dell'immagine
 
@@ -127,6 +137,7 @@ Variabili obbligatorie:
 MLFLOW_TRACKING_URI
 DOCKER_NETWORK
 TRAINING_DATA_HOST_PATH
+GIT_REPOSITORY
 ```
 
 Esempio generico:
@@ -135,6 +146,7 @@ Esempio generico:
 export MLFLOW_TRACKING_URI=http://mlflow:5000
 export DOCKER_NETWORK=mlops-local-network
 export TRAINING_DATA_HOST_PATH=/opt/mlops-local-poc/training/data/input/SeoulBikeData.csv
+export GIT_REPOSITORY=/mnt/c/<percorso-del-repository>/mlops-local-poc
 
 python3 scripts/run_training.py
 ```
@@ -146,6 +158,7 @@ python3 scripts/run_training.py \
   --training-data /opt/mlops-local-poc/training/data/input/SeoulBikeData.csv \
   --mlflow-tracking-uri http://mlflow:5000 \
   --docker-network mlops-local-network \
+  --git-repository /mnt/c/<percorso-del-repository>/mlops-local-poc \
   --n-estimators 300 \
   --max-depth 20
 ```

@@ -27,6 +27,7 @@ class RunContext:
     docker_network: str
     registered_model_name: str
     training_data_path: Path
+    git_repository_path: Path
     n_estimators: int
     max_depth: int
     git_commit: str
@@ -63,6 +64,15 @@ def parse_args() -> argparse.Namespace:
         "--docker-network",
         default=os.getenv("DOCKER_NETWORK"),
         help=("Docker network containing the MLflow service. Defaults to DOCKER_NETWORK."),
+    )
+    parser.add_argument(
+        "--git-repository",
+        default=os.getenv("GIT_REPOSITORY"),
+        help=(
+            "Absolute WSL path of the authoritative Git repository used to "
+            "resolve commit, remote URL and working-tree state. "
+            "Defaults to GIT_REPOSITORY."
+        ),
     )
     parser.add_argument(
         "--image-tag",
@@ -121,16 +131,32 @@ def run_command(
     return result.stdout.strip()
 
 
-def get_git_metadata(repository_dir: Path) -> dict[str, str]:
+def validate_git_repository(git_repository_path: Path) -> None:
+    if not git_repository_path.is_dir():
+        raise PreRunValidationError(f"Git repository directory not found: {git_repository_path}")
+
+    try:
+        is_git_repository = run_command(
+            ["git", "rev-parse", "--is-inside-work-tree"],
+            cwd=git_repository_path,
+        )
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise PreRunValidationError(f"Unable to execute Git against repository: {git_repository_path}") from error
+
+    if is_git_repository.lower() != "true":
+        raise PreRunValidationError(f"Path is not a Git working tree: {git_repository_path}")
+
+
+def get_git_metadata(git_repository_path: Path) -> dict[str, str]:
     git_commit = run_command(
         ["git", "rev-parse", "HEAD"],
-        cwd=repository_dir,
+        cwd=git_repository_path,
     )
 
     git_remote = (
         run_command(
             ["git", "config", "--get", "remote.origin.url"],
-            cwd=repository_dir,
+            cwd=git_repository_path,
             check=False,
         )
         or "unknown"
@@ -138,7 +164,7 @@ def get_git_metadata(repository_dir: Path) -> dict[str, str]:
 
     git_status = run_command(
         ["git", "status", "--porcelain"],
-        cwd=repository_dir,
+        cwd=git_repository_path,
     )
 
     return {
@@ -185,8 +211,13 @@ def resolve_run_context(args: argparse.Namespace) -> RunContext:
         args.docker_network,
         "--docker-network / DOCKER_NETWORK",
     )
+    git_repository = require_value(
+        args.git_repository,
+        "--git-repository / GIT_REPOSITORY",
+    )
 
     training_data_path = Path(training_data).expanduser().resolve()
+    git_repository_path = Path(git_repository).expanduser().resolve()
 
     if not training_data_path.is_file():
         raise PreRunValidationError(f"Training data file not found: {training_data_path}")
@@ -194,18 +225,12 @@ def resolve_run_context(args: argparse.Namespace) -> RunContext:
     if training_data_path.suffix.lower() != ".csv":
         raise PreRunValidationError(f"Training data must be a CSV file. Received: {training_data_path}")
 
-    script_path = Path(__file__).resolve()
-    repository_dir = script_path.parents[2]
-
-    if not (repository_dir / ".git").exists():
-        raise PreRunValidationError(
-            f"Git repository metadata was not found at: {repository_dir}. Run the launcher from a Git working copy."
-        )
+    validate_git_repository(git_repository_path)
 
     try:
-        git_metadata = get_git_metadata(repository_dir)
+        git_metadata = get_git_metadata(git_repository_path)
     except (OSError, subprocess.CalledProcessError) as error:
-        raise PreRunValidationError(f"Unable to resolve Git metadata from: {repository_dir}") from error
+        raise PreRunValidationError(f"Unable to resolve Git metadata from: {git_repository_path}") from error
 
     try:
         image_digest = get_image_digest(args.image_tag)
@@ -223,6 +248,7 @@ def resolve_run_context(args: argparse.Namespace) -> RunContext:
         docker_network=docker_network,
         registered_model_name=args.registered_model_name,
         training_data_path=training_data_path,
+        git_repository_path=git_repository_path,
         n_estimators=args.n_estimators,
         max_depth=args.max_depth,
         git_commit=git_metadata["commit"],
@@ -285,6 +311,7 @@ def print_run_summary(
     print(f"  Registered model:       {run_context.registered_model_name}")
     print(f"  Dataset host path:      {run_context.training_data_path}")
     print(f"  Dataset container path: {CONTAINER_DATASET_PATH}")
+    print(f"  Git repository:         {run_context.git_repository_path}")
     print(f"  Git commit:             {run_context.git_commit}")
     print(f"  Git remote:             {run_context.git_remote}")
     print(f"  Git dirty:              {run_context.git_dirty}")
