@@ -1,0 +1,8 @@
+# MLflow client: deve restare allineato al container di training.
+mlflow==3.14.0
+
+# Rendering del template Kubernetes InferenceService.
+Jinja2==3.1.6
+
+# Lettura della configurazione locale e validazione/emissione YAML.
+PyYAML==6.0.3

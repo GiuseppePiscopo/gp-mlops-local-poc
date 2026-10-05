@@ -1,0 +1,17 @@
+.git
+.gitignore
+.dockerignore
+
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+.env
+.env.*
+*.secret.yaml
+*.secret.yml
+
+rendered/
+scripts/
+tests/

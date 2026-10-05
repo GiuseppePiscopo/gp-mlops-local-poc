@@ -1,0 +1,27 @@
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+
+metadata:
+  name: {{ settings.kserve.inference_service_name | tojson }}
+  namespace: {{ settings.kserve.namespace | tojson }}
+  labels:
+    app.kubernetes.io/name: {{ settings.kserve.inference_service_name | tojson }}
+    app.kubernetes.io/managed-by: gp-mof-capstone-deployment-resolver
+  annotations:
+    mlops.gp-mof.dev/registered-model: {{ resolution.registered_model | tojson }}
+    mlops.gp-mof.dev/requested-alias: {{ resolution.requested_alias | tojson }}
+    mlops.gp-mof.dev/resolved-version: {{ resolution.resolved_version | tojson }}
+    mlops.gp-mof.dev/source-run-id: {{ resolution.source_run_id | tojson }}
+    mlops.gp-mof.dev/model-version-source-uri: {{ resolution.model_version_source_uri | tojson }}
+    mlops.gp-mof.dev/model-version-download-uri: {{ resolution.model_version_download_uri | tojson }}
+    mlops.gp-mof.dev/resolved-storage-uri: {{ resolution.resolved_storage_uri | tojson }}
+
+spec:
+  predictor:
+    serviceAccountName: {{ settings.kserve.service_account_name | tojson }}
+    model:
+      runtime: {{ settings.kserve.runtime | tojson }}
+      modelFormat:
+        name: {{ settings.kserve.model_format | tojson }}
+      protocolVersion: {{ settings.kserve.protocol_version | tojson }}
+      storageUri: {{ resolution.resolved_storage_uri | tojson }}

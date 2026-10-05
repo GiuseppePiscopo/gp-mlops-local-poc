@@ -1,0 +1,19 @@
+mlflow:
+  tracking_uri: http://mlflow:5000
+  artifact_proxy_uri_prefix: mlflow-artifacts:/
+  artifact_storage_uri_prefix: s3://mlflow-artifacts/
+
+model:
+  registered_model: gp-mof-capstone-model
+  alias: champion
+
+kserve:
+  namespace: gp-mof-capstone-serving
+  inference_service_name: gp-mof-capstone-model
+  service_account_name: gp-mof-capstone-model-storage-reader
+  runtime: kserve-mlserver
+  model_format: mlflow
+  protocol_version: v2
+
+output:
+  directory: /output
