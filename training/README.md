@@ -48,7 +48,8 @@ training/
     │   └── training_utils.py
     └── random_forest/
         ├── __init__.py
-        └── train.py
+        ├── train.py
+        └── verify_registered_model.py
 ```
 
 ## Confini filesystem
@@ -210,3 +211,38 @@ gp-mof-capstone-model
 ```
 
 Ogni training completato con successo produce una nuova model version.
+
+## Verifica del modello registrato
+
+`src/random_forest/verify_registered_model.py` è uno smoke test che dimostra il recupero end-to-end di una model version dal Registry: risolve un alias MLflow (es. `@candidate` o `@champion`), scarica l'artefatto dall'object storage, lo carica con `mlflow.sklearn.load_model()` ed esegue una predizione su alcune righe del CSV.
+
+A differenza del training, il verifier scarica l'artefatto del modello direttamente dall'object storage S3-compatible, senza passare dal proxy del Tracking Server. Per questo il container riceve anche l'endpoint e le credenziali di SeaweedFS, non solo `MLFLOW_TRACKING_URI`.
+
+Esempio di esecuzione, con la stessa rete Docker, gli stessi endpoint MLflow/S3 e lo stesso mount dati usati nel training:
+
+```bash
+docker run --rm \
+  --network mlops-local-network \
+  -e MLFLOW_TRACKING_URI=http://mlflow:5000 \
+  -e MLFLOW_S3_ENDPOINT_URL=http://seaweedfs:8333 \
+  -e AWS_ACCESS_KEY_ID=admin \
+  -e AWS_SECRET_ACCESS_KEY=admin \
+  -e AWS_DEFAULT_REGION=us-east-1 \
+  -v /opt/mlops-local-poc/training/data:/data:ro \
+  --entrypoint python \
+  gp-mof-capstone-training:dev \
+  -m random_forest.verify_registered_model \
+  --training_data /data/input/SeoulBikeData.csv \
+  --model_uri models:/gp-mof-capstone-model@candidate \
+  --rows 5
+```
+
+Argomenti:
+
+| Argomento | Obbligatorio | Default |
+|---|---|---|
+| `--training_data` | sì | — |
+| `--model_uri` | no | `models:/gp-mof-capstone-model@candidate` |
+| `--rows` | no | `5` |
+
+L'output atteso elenca l'URI del modello risolto e una predizione per ciascuna delle righe richieste, a conferma che la model version referenziata dall'alias è realmente recuperabile e utilizzabile.
