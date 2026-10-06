@@ -1,0 +1,8 @@
+mlserver==1.7.1
+mlserver-mlflow==1.7.1
+mlflow==3.14.0
+numpy==1.26.4
+pandas==2.2.3
+scikit-learn==1.6.1
+scipy==1.17.1
+skops==0.16.0

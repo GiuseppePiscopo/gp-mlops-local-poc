@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gp-mof-capstone-serving
+  labels:
+    app.kubernetes.io/part-of: gp-mof-capstone
+    app.kubernetes.io/component: serving
