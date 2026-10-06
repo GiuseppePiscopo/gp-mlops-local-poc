@@ -11,7 +11,8 @@ kserve:
   namespace: gp-mof-capstone-serving
   inference_service_name: gp-mof-capstone-model
   service_account_name: gp-mof-capstone-model-storage-reader
-  runtime: kserve-mlserver
+  storage_secret_name: gp-mof-capstone-model-s3-credentials
+  runtime: gp-mof-capstone-mlserver
   model_format: mlflow
   protocol_version: v2
 

@@ -30,6 +30,7 @@ class KServeSettings:
     namespace: str
     inference_service_name: str
     service_account_name: str
+    storage_secret_name: str
     runtime: str
     model_format: str
     protocol_version: str
@@ -129,6 +130,10 @@ def load_deployment_settings(arguments: argparse.Namespace) -> DeploymentSetting
         service_account_name=require_string(
             configuration,
             ("kserve", "service_account_name"),
+        ),
+        storage_secret_name=require_string(
+            configuration,
+            ("kserve", "storage_secret_name"),
         ),
         runtime=require_string(configuration, ("kserve", "runtime")),
         model_format=require_string(configuration, ("kserve", "model_format")),

@@ -15,6 +15,7 @@ metadata:
     mlops.gp-mof.dev/model-version-source-uri: {{ resolution.model_version_source_uri | tojson }}
     mlops.gp-mof.dev/model-version-download-uri: {{ resolution.model_version_download_uri | tojson }}
     mlops.gp-mof.dev/resolved-storage-uri: {{ resolution.resolved_storage_uri | tojson }}
+    serving.kserve.io/secretName: {{ settings.kserve.storage_secret_name | tojson }}
 
 spec:
   predictor:

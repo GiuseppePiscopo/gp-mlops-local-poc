@@ -2,7 +2,7 @@
 
 Questa procedura risolve un alias MLflow del modello registrato `gp-mof-capstone-model`, verifica che la versione sia pronta, traduce l’URI logico degli artefatti nel corrispondente URI S3 SeaweedFS e genera un manifest KServe `InferenceService` con il relativo lock JSON di provenance.
 
-La procedura **non applica** il manifest al cluster Kubernetes e non avvia il serving del modello. L’applicazione e la verifica del serving sono trattate nella successiva procedura KServe.
+La procedura **non applica** il manifest al cluster Kubernetes e non avvia il serving del modello. Per collegare KinD alla rete SeaweedFS, applicare il Secret S3 e avviare l'`InferenceService`, seguire la [procedura di serving](../serving/serving-kserve-model.md).
 
 ## Prerequisiti
 
@@ -160,7 +160,9 @@ L’output JSON deve contenere valori simili ai seguenti:
 }
 ```
 
-Il manifest KServe dichiara il runtime `kserve-mlserver`, il formato modello `mlflow` e il protocollo V2.
+Il manifest KServe dichiara il runtime dedicato `gp-mof-capstone-mlserver`, il formato modello `mlflow` e il protocollo V2, come configurati nel repository corrente.
+
+In questa fase il runtime viene soltanto referenziato: non occorre ancora costruire la sua immagine o applicare il `ServingRuntime` al cluster. Queste operazioni, la verifica della compatibilita con il modello e la prova di inferenza appartengono alla successiva [procedura di serving](../serving/serving-kserve-model.md). La validazione del manifest non verifica che il runtime referenziato sia presente o funzionante.
 
 ## Ispezionare gli output
 
@@ -189,17 +191,24 @@ Controllare in particolare:
 metadata:
   name: "gp-mof-capstone-model"
   namespace: "gp-mof-capstone-serving"
+  annotations:
+    serving.kserve.io/secretName: "gp-mof-capstone-model-s3-credentials"
 
 spec:
   predictor:
     serviceAccountName: "gp-mof-capstone-model-storage-reader"
     model:
-      runtime: "kserve-mlserver"
+      runtime: "gp-mof-capstone-mlserver"
       modelFormat:
         name: "mlflow"
       protocolVersion: "v2"
       storageUri: "s3://mlflow-artifacts/2/models/<model-id>/artifacts"
 ```
+
+Il nome del Secret usato dallo storage initializer è configurato in
+`kserve.storage_secret_name`. L'annotation va sul metadata dell'`InferenceService`;
+l'annotation sul solo ServiceAccount non seleziona il Secret per lo storage
+initializer.
 
 Visualizzare il lock JSON:
 
@@ -353,4 +362,3 @@ Al termine della procedura risultano verificati:
 - errore su alias inesistente gestito senza produrre manifest o lock aggiuntivi.
 
 L'applicazione del manifest al cluster e la verifica del serving del modello non fanno parte di questa procedura.
-
