@@ -23,15 +23,36 @@ All'interno di questa fase, gli 8 passaggi concettuali della "vertical slice" er
 - Modello registrato servito tramite `InferenceService` con `modelFormat: mlflow` e protocollo V2, su un `ServingRuntime` namespaced dedicato (immagine MLServer con dipendenze allineate al modello), accesso agli artefatti S3 tramite Secret e ServiceAccount.
 - Verifica dell'inferenza diretta sul predictor e tramite Envoy Gateway (port-forward). Il test Iris resta indipendente.
 
-## Prossimo sviluppo
+## Prossimi sviluppi
 
-**Monitoring** — osservabilità del modello servito, in due lab distinti, da dettagliare quando sarà il caso:
+**Monitoring** — osservabilità del modello servito, articolata in lab distinti, da dettagliare quando sarà il caso:
 
-1. **Infrastruttura di monitoring** — stack che raccoglie e visualizza le metriche nel cluster (oggi assente), verificato sul predictor già servito
-2. **Monitoring del modello servito** — collegamento dello stack al serving. Aree da valutare:
-   - metriche del servizio (richieste, latenza, errori) e stato del predictor
-   - logging delle richieste e delle predizioni
-   - monitoraggio della qualità: drift dei dati e delle predizioni rispetto al training
+1. **Infrastruttura di monitoring** — stack minimale per raccogliere e visualizzare le metriche disponibili nel cluster, verificato sul predictor già servito:
+   - installazione di Prometheus per la raccolta e l’archiviazione delle metriche
+   - installazione di Grafana per le dashboard
+   - installazione di kube-state-metrics per lo stato degli oggetti Kubernetes
+   - dashboard del predictor: disponibilità, restart, CPU e memoria
+   - verifica delle metriche MLServer attualmente esposte su `/metrics`
+   - valutazione e, se disponibili, integrazione delle metriche di Envoy/Gateway
+
+2. **Monitoring del servizio di inferenza** — metriche operative del servizio, basate su metriche già esposte oppure su instrumentation aggiuntiva:
+   - numero di richieste e tasso di errore
+   - latenza delle inferenze, idealmente distinta per fase di pre/post-processing e predizione
+   - stato delle code e delle risorse del serving runtime
+   - dashboard delle performance e degli errori del modello servito
+
+3. **Request/response logging** — registrazione controllata delle inferenze come base per l’analisi della qualità:
+   - logging strutturato delle feature di input e delle predizioni
+   - associazione di ogni record a timestamp, versione del modello e identificativo richiesta
+   - scelta del volume, della frequenza di campionamento e delle politiche di retention
+   - conservazione dei log in un formato analizzabile, ad esempio JSONL o Parquet
+
+4. **Monitoring della qualità del modello** — valutazione periodica di drift e degrado, basata sui log di inferenza:
+   - definizione del reference dataset associato alla versione del modello servita
+   - confronto tra reference dataset e batch correnti di richieste/predizioni
+   - rilevamento di data drift sulle feature e prediction drift sulle uscite del modello
+   - valutazione della qualità effettiva quando diventano disponibili i ground truth
+   - esportazione delle metriche di drift verso Prometheus/Grafana e, in prospettiva, verso alerting o riaddestramento
 
 ## Estensioni successive
 
