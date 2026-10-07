@@ -1,4 +1,6 @@
-Ecco la roadmap ad alto livello definita nella sessione precedente per l'intero lab MLOps locale:
+# Roadmap MLOps Locale
+
+Ecco la roadmap ad alto livello per l'intero lab MLOps locale:
 
 ## Già completato
 
