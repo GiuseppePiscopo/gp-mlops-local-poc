@@ -28,6 +28,10 @@ spec:
           value: "sqlite:////tmp/mlflow.db"
       ports:
         - containerPort: 8080
+          name: http
+          protocol: TCP
+        - containerPort: 8082
+          name: metrics
           protocol: TCP
       readinessProbe:
         httpGet:

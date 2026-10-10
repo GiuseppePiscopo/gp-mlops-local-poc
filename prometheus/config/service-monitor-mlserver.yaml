@@ -1,0 +1,18 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: gp-mof-capstone-model-mlserver
+  namespace: gp-mof-capstone-serving
+  labels:
+    app.kubernetes.io/name: gp-mof-capstone-model
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: gp-mof-capstone-model
+  namespaceSelector:
+    matchNames:
+      - gp-mof-capstone-serving
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 15s

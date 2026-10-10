@@ -1,0 +1,260 @@
+# Setup dello stack di monitoring (Prometheus + Grafana)
+
+Questa procedura installa lo stack minimo di monitoring per il cluster MLOps
+locale e collega a Prometheus le metriche MLServer già esposte dal predictor
+servito, fino alla verifica del target di scrape e della metrica di inferenza.
+
+La procedura **non crea** dashboard del predictor: disponibilità, restart, CPU
+e memoria, e l'integrazione delle metriche Envoy/Gateway, appartengono ai lab
+successivi della fase di monitoring.
+
+## Prerequisiti
+
+- WSL2 con Docker Desktop integrato e Docker Compose funzionante;
+- `helm`, `kind`, `kubectl`, `curl` e `python3` disponibili in WSL;
+- accesso `sudo` e directory `/opt/mlops-local-poc/` posseduta dall'utente WSL;
+- cluster `mlops-test`, contesto `kind-mlops-test`, KServe in modalità Standard
+  già installato ([procedura KServe](../kserve/kserve-kind-wsl-setup.md));
+- [procedura di serving](../serving/serving-kserve-model.md) completata con i
+  file del repository corrente: `InferenceService` `gp-mof-capstone-model` nel
+  namespace `gp-mof-capstone-serving`, predictor `Running`, richiesta di
+  inferenza V2 già verificata e Service predictor con porta `metrics`
+  (`8082 -> 8082`);
+- repository completo della directory `prometheus/`.
+
+Tutti i comandi si eseguono in un terminale **Bash in WSL**, salvo dove è
+indicato un secondo terminale dedicato ai port-forward.
+
+## Preparare la directory operativa e sincronizzare
+
+Impostare il percorso del repository Windows visto da WSL:
+
+```bash
+export REPO="/mnt/c/<percorso-repository>/mlops-local-poc"
+ls -d "${REPO}/prometheus"
+
+sudo install -d -o "$USER" -g "$(id -gn)" -m 0755 \
+  /opt/mlops-local-poc/prometheus
+
+bash "${REPO}/prometheus/scripts/sync-to-wsl.sh"
+```
+
+Il comando `ls -d` deve stampare il percorso, senza errori.
+
+```bash
+find /opt/mlops-local-poc/prometheus -maxdepth 2 -type f | sort
+```
+
+Devono essere presenti almeno:
+
+```text
+/opt/mlops-local-poc/prometheus/config/values-kube-prometheus-stack.yaml
+/opt/mlops-local-poc/prometheus/config/service-monitor-mlserver.yaml
+/opt/mlops-local-poc/prometheus/scripts/sync-to-wsl.sh
+```
+
+## Installare lo stack di monitoring
+
+Aggiungere il repository Helm e creare il namespace:
+
+```bash
+helm repo add prometheus-community \
+  https://prometheus-community.github.io/helm-charts
+helm repo update
+
+kubectl --context kind-mlops-test create namespace monitoring \
+  --dry-run=client -o yaml | kubectl --context kind-mlops-test apply -f -
+```
+
+Installare `kube-prometheus-stack` con i valori del repository (retention `7d`,
+scrape ed evaluation interval `15s`, Alertmanager disabilitato, scrape job dei
+componenti assenti in KinD disabilitati):
+
+```bash
+helm --kube-context kind-mlops-test upgrade --install mlops-monitoring \
+  prometheus-community/kube-prometheus-stack --version 92.3.0 \
+  -n monitoring \
+  -f /opt/mlops-local-poc/prometheus/config/values-kube-prometheus-stack.yaml
+```
+
+I valori includono `serviceMonitorSelectorNilUsesHelmValues: false` e
+`serviceMonitorNamespaceSelector: {}`, così Prometheus raccoglie anche il
+`ServiceMonitor` nel namespace di serving.
+
+Attendere i pod:
+
+```bash
+kubectl --context kind-mlops-test -n monitoring get pods -o wide
+```
+
+Atteso: `Running` per Grafana, kube-state-metrics, operator, node-exporter e
+`prometheus-mlops-monitoring-prometheus-0` (`2/2`).
+
+## Verificare Prometheus
+
+Nel **terminale dei port-forward** (WSL), lasciare attivo:
+
+```bash
+kubectl --context kind-mlops-test -n monitoring \
+  port-forward service/mlops-monitoring-prometheus 9090:9090
+```
+
+Nel **terminale dei comandi**, verificare i target attivi:
+
+```bash
+curl -s http://127.0.0.1:9090/api/v1/targets \
+  | python3 -c "import json,sys; d=json.load(sys.stdin); at=d['data']['activeTargets']; print('active:', len(at)); [print(t['discoveredLabels'].get('__address__'), t['labels'].get('job'), t['health']) for t in at]"
+```
+
+Atteso: tutti i target con `health` uguale a `up`, tra cui:
+
+```text
+apiserver
+coredns
+kubelet
+mlops-monitoring-grafana
+kube-state-metrics
+mlops-monitoring-operator
+node-exporter
+mlops-monitoring-prometheus
+```
+
+La stessa vista è disponibile nel browser su `http://localhost:9090/targets`.
+
+## Verificare Grafana
+
+Nel **terminale dei port-forward**, aggiungere:
+
+```bash
+kubectl --context kind-mlops-test -n monitoring \
+  port-forward service/mlops-monitoring-grafana 3000:80
+```
+
+Aprire `http://localhost:3000` e accedere con utente `admin` e password
+`admin`. Il datasource Prometheus è già provisionato: verificarlo in
+`Connections > Data sources > Prometheus` con `Save & test`.
+
+Atteso: esito positivo del test del datasource.
+
+## Collegare le metriche MLServer
+
+La procedura di serving lascia il Service del predictor con la porta `metrics`
+(`8082 -> 8082`). Verificare:
+
+```bash
+kubectl --context kind-mlops-test -n gp-mof-capstone-serving \
+  get svc gp-mof-capstone-model-predictor \
+  -o jsonpath='{range .spec.ports[*]}{.name} {.port}->{.targetPort}{"\n"}{end}'
+```
+
+Atteso:
+
+```text
+http 80->8080
+metrics 8082->8082
+```
+
+Il file `config/service-monitor-mlserver.yaml` seleziona quel Service e ne
+raccoglie `/metrics` ogni `15s` sulla porta nominata. Controllare l'endpoint:
+
+```bash
+grep -E 'port:|path:|interval:' \
+  /opt/mlops-local-poc/prometheus/config/service-monitor-mlserver.yaml
+```
+
+Atteso:
+
+```text
+- port: metrics
+path: /metrics
+interval: 15s
+```
+
+Applicarlo:
+
+```bash
+kubectl --context kind-mlops-test apply \
+  -f /opt/mlops-local-poc/prometheus/config/service-monitor-mlserver.yaml
+
+kubectl --context kind-mlops-test -n gp-mof-capstone-serving \
+  get servicemonitor gp-mof-capstone-model-mlserver
+```
+
+Il secondo `get` deve mostrare la risorsa creata, senza errori.
+
+Attendere uno scrape interval (`15s`) e riverificare i target:
+
+```bash
+curl -s http://127.0.0.1:9090/api/v1/targets \
+  | python3 -c "import json,sys; d=json.load(sys.stdin); [print(t['discoveredLabels'].get('__address__'), t['labels'].get('job'), t['health']) for t in d['data']['activeTargets'] if 'capstone' in json.dumps(t).lower()]"
+```
+
+Atteso: una riga simile a:
+
+```text
+10.244.0.x:8082 gp-mof-capstone-model-predictor up
+```
+
+(l'IP del pod varia a ogni rollout).
+
+## Verificare la metrica di inferenza
+
+La metrica `model_infer_request_success_total` compare dopo almeno
+un'inferenza riuscita. Se la [procedura di serving](../serving/serving-kserve-model.md)
+è stata completata, è già disponibile:
+
+```bash
+curl -s 'http://127.0.0.1:9090/api/v1/query?query=model_infer_request_success_total' \
+  | python3 -m json.tool
+```
+
+Atteso: `status: success` con almeno una serie del tipo:
+
+```json
+{
+  "model": "gp-mof-capstone-model",
+  "namespace": "gp-mof-capstone-serving",
+  "job": "gp-mof-capstone-model-predictor"
+}
+```
+
+Se il risultato è vuoto, eseguire un'inferenza V2 secondo la procedura di
+serving e ripetere la query dopo `15s`.
+
+Terminati i controlli, interrompere i port-forward con `Ctrl+C`.
+
+## Sequenza operativa ordinaria
+
+Dopo una modifica ai file nel repository Windows:
+
+```bash
+bash "${REPO}/prometheus/scripts/sync-to-wsl.sh"
+
+helm --kube-context kind-mlops-test upgrade --install mlops-monitoring \
+  prometheus-community/kube-prometheus-stack --version 92.3.0 \
+  -n monitoring \
+  -f /opt/mlops-local-poc/prometheus/config/values-kube-prometheus-stack.yaml
+
+kubectl --context kind-mlops-test apply \
+  -f /opt/mlops-local-poc/prometheus/config/service-monitor-mlserver.yaml
+```
+
+## Stato finale della fase (punto raggiunto)
+
+Al termine della procedura risultano verificati:
+
+- namespace `monitoring` e release Helm `mlops-monitoring` (chart
+  `kube-prometheus-stack-92.3.0`) attivi, con tutti i pod `Running`;
+- target Prometheus predefiniti (`apiserver`, `coredns`, `kubelet`, Grafana,
+  kube-state-metrics, operator, node-exporter, Prometheus) tutti `up`;
+- Grafana raggiungibile su `http://localhost:3000`, datasource Prometheus
+  testato con esito positivo;
+- `ServingRuntime` con porte `8080/http` e `8082/metrics` dichiarate, Service
+  predictor con porta `metrics 8082 -> 8082`;
+- `ServiceMonitor` applicato e target `gp-mof-capstone-model-predictor`
+  su `:8082` con `health: up`;
+- metrica `model_infer_request_success_total` del modello servito
+  interrogabile in Prometheus.
+
+Restano ai lab successivi: dashboard del predictor (disponibilità, restart,
+CPU e memoria), inventario delle metriche MLServer e metriche Envoy/Gateway.
