@@ -1,0 +1,120 @@
+{
+  "uid": "gp-mof-capstone-service",
+  "title": "Servizio inferenza gp-mof-capstone-model",
+  "tags": ["mlops", "kserve"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "15s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Richieste/sec (infer)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(rest_server_requests_total{job=\"gp-mof-capstone-model-predictor\",path=\"/v2/models/{model_name}/infer\"}[5m])) by (status_code)",
+          "legendFormat": "{{status_code}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": {
+        "legend": { "displayMode": "table" },
+        "tooltip": { "mode": "multi" }
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Tasso errore",
+      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(rest_server_requests_total{job=\"gp-mof-capstone-model-predictor\",path=\"/v2/models/{model_name}/infer\",status_code=~\"5..\"}[5m])) / sum(rate(rest_server_requests_total{job=\"gp-mof-capstone-model-predictor\",path=\"/v2/models/{model_name}/infer\"}[5m]))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "green" },
+              { "value": 0.01, "color": "red" }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Richieste in corso",
+      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rest_server_requests_in_progress{job=\"gp-mof-capstone-model-predictor\",method=\"POST\"})",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Latenza infer (media, p95, overhead server)",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(model_infer_request_duration_sum{job=\"gp-mof-capstone-model-predictor\"}[5m])) / sum(rate(model_infer_request_duration_count{job=\"gp-mof-capstone-model-predictor\"}[5m]))",
+          "legendFormat": "media",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, sum(rate(rest_server_request_duration_seconds_bucket{job=\"gp-mof-capstone-model-predictor\",path=\"/v2/models/{model_name}/infer\"}[5m])) by (le))",
+          "legendFormat": "p95",
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(rest_server_request_duration_seconds_sum{job=\"gp-mof-capstone-model-predictor\",path=\"/v2/models/{model_name}/infer\"}[5m])) / sum(rate(rest_server_request_duration_seconds_count{job=\"gp-mof-capstone-model-predictor\",path=\"/v2/models/{model_name}/infer\"}[5m])) - sum(rate(model_infer_request_duration_sum{job=\"gp-mof-capstone-model-predictor\"}[5m])) / sum(rate(model_infer_request_duration_count{job=\"gp-mof-capstone-model-predictor\"}[5m]))",
+          "legendFormat": "overhead server",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "s" },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table" },
+        "tooltip": { "mode": "multi" }
+      }
+    }
+  ]
+}

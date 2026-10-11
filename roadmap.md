@@ -31,23 +31,22 @@ All'interno di questa fase, gli 8 passaggi concettuali della "vertical slice" er
 - Metriche MLServer raccolte via `ServiceMonitor` (porta `metrics` dichiarata nel `ServingRuntime`).
 - Metriche Envoy/Gateway raccolte (control-plane via `ServiceMonitor`, proxy via `PodMonitor`) e verificate con traffico di prova via gateway.
 
+**Monitoring del servizio di inferenza** *(completato)*
+- Dashboard di performance ed errori in directory dedicata `inference-monitoring/` ([procedura](inference-monitoring/service-monitoring-setup.md)): richieste al secondo per stato HTTP, tasso di errore, richieste in corso, latenza media/p95.
+- Code assenti per architettura (MLServer monoreplica senza batching): concorrenza coperta dal pannello richieste in corso; risorse CPU/memoria nella dashboard del predictor.
+- Split pre/post-processing: MLServer espone solo durata dell'`infer` e dell'handling HTTP; la differenza (~3%) è mostrata come serie `overhead server`. Instrumentation custom rimandata (decisione registrata nella procedura).
+
 ## Prossimi sviluppi
 
 **Monitoring** — osservabilità del modello servito, articolata in lab distinti, da dettagliare quando sarà il caso:
 
-1. **Monitoring del servizio di inferenza** — metriche operative del servizio, basate su metriche già esposte oppure su instrumentation aggiuntiva:
-   - numero di richieste e tasso di errore
-   - latenza delle inferenze, idealmente distinta per fase di pre/post-processing e predizione
-   - stato delle code e delle risorse del serving runtime
-   - dashboard delle performance e degli errori del modello servito
-
-2. **Request/response logging** — registrazione controllata delle inferenze come base per l’analisi della qualità:
+1. **Request/response logging** — registrazione controllata delle inferenze come base per l’analisi della qualità:
    - logging strutturato delle feature di input e delle predizioni
    - associazione di ogni record a timestamp, versione del modello e identificativo richiesta
    - scelta del volume, della frequenza di campionamento e delle politiche di retention
    - conservazione dei log in un formato analizzabile, ad esempio JSONL o Parquet
 
-3. **Monitoring della qualità del modello** — valutazione periodica di drift e degrado, basata sui log di inferenza:
+2. **Monitoring della qualità del modello** — valutazione periodica di drift e degrado, basata sui log di inferenza:
    - definizione del reference dataset associato alla versione del modello servita
    - confronto tra reference dataset e batch correnti di richieste/predizioni
    - rilevamento di data drift sulle feature e prediction drift sulle uscite del modello
