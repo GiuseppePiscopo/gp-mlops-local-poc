@@ -1,12 +1,9 @@
 # Setup dello stack di monitoring (Prometheus + Grafana)
 
 Questa procedura installa lo stack minimo di monitoring per il cluster MLOps
-locale, collega a Prometheus le metriche MLServer già esposte dal predictor
-servito e crea la dashboard Grafana del predictor, fino alla verifica del
-target di scrape, dei pannelli e della metrica di inferenza.
-
-L'integrazione delle metriche Envoy/Gateway appartiene al lab successivo della
-fase di monitoring.
+locale, collega a Prometheus le metriche MLServer del predictor servito e
+quelle di Envoy/Gateway, e crea la dashboard Grafana del predictor, fino alla
+verifica dei target di scrape, dei pannelli e delle metriche raccolte.
 
 ## Prerequisiti
 
@@ -50,8 +47,11 @@ Devono essere presenti almeno:
 ```text
 /opt/mlops-local-poc/prometheus/config/values-kube-prometheus-stack.yaml
 /opt/mlops-local-poc/prometheus/config/service-monitor-mlserver.yaml
+/opt/mlops-local-poc/prometheus/config/service-monitor-envoy-gateway.yaml
+/opt/mlops-local-poc/prometheus/config/pod-monitor-envoy-proxy.yaml
 /opt/mlops-local-poc/prometheus/dashboards/predictor-dashboard.json
 /opt/mlops-local-poc/prometheus/scripts/apply-dashboard.sh
+/opt/mlops-local-poc/prometheus/scripts/send-test-traffic.sh
 /opt/mlops-local-poc/prometheus/scripts/sync-to-wsl.sh
 ```
 
@@ -266,6 +266,127 @@ Atteso: `status: success` con almeno una serie del tipo:
 Se il risultato è vuoto, eseguire un'inferenza V2 secondo la procedura di
 serving e ripetere la query dopo `15s`.
 
+## Integrare le metriche di Envoy/Gateway
+
+Il gateway espone metriche su due piani, entrambi già verificati come
+raggiungibili dalla rete del cluster:
+
+- control-plane `envoy-gateway`: `/metrics` sulla porta del Service nominata
+  `metrics` (`19001 -> 19001`);
+- proxy Envoy del gateway `kserve-ingress-gateway`: `/stats/prometheus` sulla
+  porta container `19001`, con una serie per route servita (tra cui quelle del
+  modello). Il Service del proxy espone solo la porta `80`, quindi qui serve
+  un `PodMonitor` che punta al pod invece del Service.
+
+Verificare i prerequisiti di discovery:
+
+```bash
+kubectl --context kind-mlops-test -n envoy-gateway-system \
+  get svc envoy-gateway \
+  -o jsonpath='{range .spec.ports[*]}{.name} {.port}->{.targetPort}{"\n"}{end}' | grep metrics
+
+kubectl --context kind-mlops-test -n envoy-gateway-system \
+  get pods -l gateway.envoyproxy.io/owning-gateway-name=kserve-ingress-gateway \
+  -o jsonpath='{range .items[*].spec.containers[*].ports[*]}{.containerPort}/{.name} {end}{"\n"}'
+```
+
+Atteso: `metrics 19001->19001` per il Service e `19001/metrics` tra le porte
+del container `envoy` del proxy.
+
+Il file `config/service-monitor-envoy-gateway.yaml` seleziona il Service del
+control-plane. Controllare l'endpoint e applicarlo:
+
+```bash
+grep -E 'port:|path:|interval:' \
+  /opt/mlops-local-poc/prometheus/config/service-monitor-envoy-gateway.yaml
+
+kubectl --context kind-mlops-test apply \
+  -f /opt/mlops-local-poc/prometheus/config/service-monitor-envoy-gateway.yaml
+```
+
+Il file `config/pod-monitor-envoy-proxy.yaml` seleziona i pod del proxy dalla
+label del gateway che li possiede. Controllare l'endpoint e applicarlo:
+
+```bash
+grep -E 'port(Number)?:|path:|interval:' \
+  /opt/mlops-local-poc/prometheus/config/pod-monitor-envoy-proxy.yaml
+
+kubectl --context kind-mlops-test apply \
+  -f /opt/mlops-local-poc/prometheus/config/pod-monitor-envoy-proxy.yaml
+```
+
+Attendere un paio di minuti (la discovery dei pod è più lenta di quella dei
+Service) e riverificare i target:
+
+```bash
+curl -s http://127.0.0.1:9090/api/v1/targets \
+  | python3 -c "import json,sys; d=json.load(sys.stdin); [print(t['discoveredLabels'].get('__address__'), t['labels'].get('job'), t['health']) for t in d['data']['activeTargets'] if 'envoy' in json.dumps(t).lower() or 'gateway' in json.dumps(t).lower()]"
+```
+
+Atteso: due righe con `health` uguale a `up`, del tipo:
+
+```text
+10.244.0.x:19001 envoy-gateway up
+10.244.0.y:19001 monitoring/envoy-proxy up
+```
+
+(gli IP dei pod variano a ogni rollout).
+
+Verificare le metriche raccolte, tra cui i contatori per route del modello
+(ancora a `0` se non è transitato traffico dal gateway):
+
+```bash
+curl -s -G 'http://127.0.0.1:9090/api/v1/query' --data-urlencode 'query=envoy_cluster_upstream_rq_total' \
+  | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['status'], 'series:', len(d['data']['result'])); [print(' ', r['metric'].get('envoy_cluster_name'), '=', r['value'][1]) for r in d['data']['result'] if 'capstone' in r['metric'].get('envoy_cluster_name', '')]"
+```
+
+Atteso: `status: success` con le serie delle route di
+`gp-mof-capstone-serving`.
+
+## Generare traffico di prova
+
+Cinque inferenze via gateway bastano a muovere i contatori di entrambi i
+piani. Nel **terminale dei port-forward**, avviare quello verso Envoy (il nome
+del Service include un suffisso variabile: ricavarlo via label):
+
+```bash
+ENVOY_SVC=$(kubectl --context kind-mlops-test get svc -A \
+  -l gateway.envoyproxy.io/owning-gateway-name=kserve-ingress-gateway \
+  -o jsonpath='{.items[0].metadata.namespace}/{.items[0].metadata.name}')
+
+kubectl --context kind-mlops-test -n "${ENVOY_SVC%%/*}" \
+  port-forward "service/${ENVOY_SVC##*/}" 8080:80
+```
+
+Nel **terminale dei comandi**, generare il traffico con lo script del
+repository (di default 5 richieste; richiede il file di richiesta prodotto
+dalla procedura di serving):
+
+```bash
+bash /opt/mlops-local-poc/prometheus/scripts/send-test-traffic.sh
+```
+
+Atteso: cinque righe `richiesta i/5: 200`.
+
+Riverificare i contatori dopo `15s`:
+
+```bash
+curl -s -G 'http://127.0.0.1:9090/api/v1/query' --data-urlencode 'query=envoy_cluster_upstream_rq_total{envoy_cluster_name=~".*capstone.*"}' \
+  | python3 -c "import json,sys; d=json.load(sys.stdin); [print(r['metric'].get('envoy_cluster_name'), '=', r['value'][1]) for r in d['data']['result']]"
+```
+
+Atteso: la serie della route `.../gp-mof-capstone-model/rule/0` aumentata
+dello stesso numero di richieste inviate, mentre quella di
+`.../gp-mof-capstone-model-predictor/rule/0` (chiamata diretta) resta ferma.
+Anche `model_infer_request_success_total` cresce dello stesso numero.
+
+La stessa verifica si fa dal browser: in Grafana aprire **Explore** (icona
+bussola nel menu di sinistra), selezionare il datasource **Prometheus**,
+passare in modalità **Code**, digitare la query
+`envoy_cluster_upstream_rq_total` ed eseguire con **Run query**. La vista
+**Table** mostra il valore corrente per route, quella **Time series** il
+grafico.
+
 Terminati i controlli, interrompere i port-forward con `Ctrl+C`.
 
 ## Sequenza operativa ordinaria
@@ -282,6 +403,12 @@ helm --kube-context kind-mlops-test upgrade --install mlops-monitoring \
 
 kubectl --context kind-mlops-test apply \
   -f /opt/mlops-local-poc/prometheus/config/service-monitor-mlserver.yaml
+
+kubectl --context kind-mlops-test apply \
+  -f /opt/mlops-local-poc/prometheus/config/service-monitor-envoy-gateway.yaml
+
+kubectl --context kind-mlops-test apply \
+  -f /opt/mlops-local-poc/prometheus/config/pod-monitor-envoy-proxy.yaml
 
 bash /opt/mlops-local-poc/prometheus/scripts/apply-dashboard.sh
 ```
@@ -303,7 +430,13 @@ Al termine della procedura risultano verificati:
 - dashboard **Predictor gp-mof-capstone-model** provisionata in Grafana, con
   pannelli di disponibilità, restart, CPU e memoria popolati;
 - metrica `model_infer_request_success_total` del modello servito
-  interrogabile in Prometheus.
+  interrogabile in Prometheus;
+- target `envoy-gateway` (control-plane) e `monitoring/envoy-proxy`
+  (data-plane) con `health: up`, con le serie `envoy_cluster_upstream_rq_total`
+  per le route del modello;
+- traffico di prova via gateway con esito `200` e contatori Envoy e MLServer
+  corrispondentemente incrementati.
 
-Restano al lab successivo: inventario delle metriche MLServer e metriche
-Envoy/Gateway.
+Con questo il lab **Infrastruttura di monitoring** è completo. Il passo
+successivo della roadmap è il **Monitoring del servizio di inferenza**
+(richieste, errori, latenze, dashboard di performance).
