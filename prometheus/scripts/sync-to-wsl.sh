@@ -32,6 +32,7 @@ Options:
 
 Only these static sources are synchronized:
   - config/
+  - dashboards/
   - scripts/
 
 No runtime or rendered directory is modified.
@@ -70,6 +71,7 @@ fi
 
 required_directories=(
   "config"
+  "dashboards"
   "scripts"
 )
 
@@ -94,7 +96,7 @@ done
 while IFS= read -r -d '' file; do
   sed -i 's/\r$//' "${file}"
 done < <(
-  find "${TARGET_PROMETHEUS}/config" "${TARGET_PROMETHEUS}/scripts" \
+  find "${TARGET_PROMETHEUS}/config" "${TARGET_PROMETHEUS}/dashboards" "${TARGET_PROMETHEUS}/scripts" \
     -type f \
     \( \
       -name "*.sh" -o \

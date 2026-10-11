@@ -1,12 +1,12 @@
 # Setup dello stack di monitoring (Prometheus + Grafana)
 
 Questa procedura installa lo stack minimo di monitoring per il cluster MLOps
-locale e collega a Prometheus le metriche MLServer già esposte dal predictor
-servito, fino alla verifica del target di scrape e della metrica di inferenza.
+locale, collega a Prometheus le metriche MLServer già esposte dal predictor
+servito e crea la dashboard Grafana del predictor, fino alla verifica del
+target di scrape, dei pannelli e della metrica di inferenza.
 
-La procedura **non crea** dashboard del predictor: disponibilità, restart, CPU
-e memoria, e l'integrazione delle metriche Envoy/Gateway, appartengono ai lab
-successivi della fase di monitoring.
+L'integrazione delle metriche Envoy/Gateway appartiene al lab successivo della
+fase di monitoring.
 
 ## Prerequisiti
 
@@ -50,6 +50,8 @@ Devono essere presenti almeno:
 ```text
 /opt/mlops-local-poc/prometheus/config/values-kube-prometheus-stack.yaml
 /opt/mlops-local-poc/prometheus/config/service-monitor-mlserver.yaml
+/opt/mlops-local-poc/prometheus/dashboards/predictor-dashboard.json
+/opt/mlops-local-poc/prometheus/scripts/apply-dashboard.sh
 /opt/mlops-local-poc/prometheus/scripts/sync-to-wsl.sh
 ```
 
@@ -197,6 +199,49 @@ Atteso: una riga simile a:
 
 (l'IP del pod varia a ogni rollout).
 
+## Creare la dashboard del predictor
+
+Il file `dashboards/predictor-dashboard.json` definisce la dashboard
+**Predictor gp-mof-capstone-model** con quattro pannelli: disponibilità,
+restart, CPU e memoria. Lo script `scripts/apply-dashboard.sh` lo pubblica
+come ConfigMap etichettata, raccolta automaticamente dal sidecar delle
+dashboard di Grafana. Applicarlo:
+
+```bash
+bash /opt/mlops-local-poc/prometheus/scripts/apply-dashboard.sh
+```
+
+Verificare la ConfigMap:
+
+```bash
+kubectl --context kind-mlops-test -n monitoring \
+  get configmap gp-mof-capstone-predictor-dashboard --show-labels
+```
+
+Atteso: una riga con `DATA` uguale a `1` e label `grafana_dashboard=1`.
+
+Verificare che Grafana l'abbia caricata:
+
+```bash
+curl -s -u admin:admin 'http://127.0.0.1:3000/api/search?query=predictor' \
+  | python3 -m json.tool
+```
+
+Atteso: un elemento con `title` uguale a `Predictor gp-mof-capstone-model` e
+`uid` uguale a `gp-mof-capstone-predictor`.
+
+Aprire la dashboard nel browser:
+
+```text
+http://localhost:3000/d/gp-mof-capstone-predictor/predictor-gp-mof-capstone-model
+```
+
+I pannelli attesi sono quattro: disponibilità, restart, CPU e memoria
+(le query esatte sono nel file JSON versionato; nel browser si leggono da
+ciascun pannello con `Inspect > Query`). Verificare che tutti mostrino dati:
+disponibilità uguale a `1`, restart `0` se il pod non è mai ripartito, curve
+di CPU e memoria popolate.
+
 ## Verificare la metrica di inferenza
 
 La metrica `model_infer_request_success_total` compare dopo almeno
@@ -237,6 +282,8 @@ helm --kube-context kind-mlops-test upgrade --install mlops-monitoring \
 
 kubectl --context kind-mlops-test apply \
   -f /opt/mlops-local-poc/prometheus/config/service-monitor-mlserver.yaml
+
+bash /opt/mlops-local-poc/prometheus/scripts/apply-dashboard.sh
 ```
 
 ## Stato finale della fase (punto raggiunto)
@@ -253,8 +300,10 @@ Al termine della procedura risultano verificati:
   predictor con porta `metrics 8082 -> 8082`;
 - `ServiceMonitor` applicato e target `gp-mof-capstone-model-predictor`
   su `:8082` con `health: up`;
+- dashboard **Predictor gp-mof-capstone-model** provisionata in Grafana, con
+  pannelli di disponibilità, restart, CPU e memoria popolati;
 - metrica `model_infer_request_success_total` del modello servito
   interrogabile in Prometheus.
 
-Restano ai lab successivi: dashboard del predictor (disponibilità, restart,
-CPU e memoria), inventario delle metriche MLServer e metriche Envoy/Gateway.
+Restano al lab successivo: inventario delle metriche MLServer e metriche
+Envoy/Gateway.
