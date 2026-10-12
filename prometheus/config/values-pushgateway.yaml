@@ -1,0 +1,13 @@
+fullnameOverride: mlops-pushgateway
+
+serviceMonitor:
+  enabled: true
+  namespace: monitoring
+  interval: 15s
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    memory: 128Mi
