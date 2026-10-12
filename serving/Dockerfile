@@ -10,16 +10,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 RUN python -m pip install --upgrade \
       pip==26.2.1 \
       setuptools==79.0.1 \
-      wheel==0.46.3 \
-    && python -m pip install \
-      mlserver==1.7.1 \
-      mlserver-mlflow==1.7.1 \
-      mlflow==3.14.0 \
-      numpy==1.26.4 \
-      pandas==2.2.3 \
-      scikit-learn==1.6.1 \
-      scipy==1.17.1 \
-      skops==0.16.0
+      wheel==0.46.3
+
+COPY requirements.txt /requirements.txt
+
+RUN python -m pip install \
+      -r /requirements.txt
 
 WORKDIR /mnt/models
 
