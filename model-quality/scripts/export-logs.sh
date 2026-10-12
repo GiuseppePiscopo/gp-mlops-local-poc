@@ -51,13 +51,17 @@ kubectl --context "${KUBE_CONTEXT}" -n "${KUBERNETES_NAMESPACE}" \
   logs "${POD}" -c kserve-container --since="${LOG_SINCE}" \
   | python3 "${SCRIPT_DIR}/filter-log-records.py" "${OUT_FILE}"
 
-# Include i log dell'istanza precedente del container, se esiste: un restart
-# cancellerebbe altrimenti i record non ancora esportati.
-kubectl --context "${KUBE_CONTEXT}" -n "${KUBERNETES_NAMESPACE}" \
-  logs "${POD}" -c kserve-container --since="${LOG_SINCE}" -p \
-  | python3 "${SCRIPT_DIR}/filter-log-records.py" "${OUT_FILE}.prev" \
-  && cat "${OUT_FILE}.prev" >> "${OUT_FILE}" || true
-rm -f "${OUT_FILE}.prev"
+# Include i log del container precedente solo se Kubernetes ne conserva uno.
+if kubectl --context "${KUBE_CONTEXT}" -n "${KUBERNETES_NAMESPACE}" \
+  logs "${POD}" -c kserve-container --since="${LOG_SINCE}" -p >/dev/null 2>&1; then
+  kubectl --context "${KUBE_CONTEXT}" -n "${KUBERNETES_NAMESPACE}" \
+    logs "${POD}" -c kserve-container --since="${LOG_SINCE}" -p \
+    | python3 "${SCRIPT_DIR}/filter-log-records.py" "${OUT_FILE}.prev"
+  cat "${OUT_FILE}.prev" >> "${OUT_FILE}"
+  rm -f "${OUT_FILE}.prev"
+else
+  echo "Nessun container precedente disponibile per ${POD}; salto i log precedenti."
+fi
 
 if [[ ! -s "${OUT_FILE}" ]]; then
   echo "Nessun record da esportare." >&2

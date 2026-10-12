@@ -11,10 +11,14 @@ import sys
 from pathlib import Path
 
 
-def main() -> None:
+def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("output", type=Path, help="JSONL file to write")
-    args = parser.parse_args()
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = parse_arguments()
 
     count = 0
     with args.output.open("w", encoding="utf-8") as out:

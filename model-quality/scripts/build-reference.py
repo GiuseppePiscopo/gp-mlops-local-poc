@@ -11,12 +11,14 @@ import argparse
 import hashlib
 import json
 import os
-from datetime import datetime, timezone
+import tempfile
+from datetime import UTC, datetime
 from pathlib import Path
 
-import mlflow
 import pandas as pd
 from mlflow.tracking import MlflowClient
+
+import mlflow
 
 QUANTILES = [round(q / 10, 2) for q in range(11)]
 
@@ -49,20 +51,41 @@ def verify_dataset(dataset: Path, expected_sha: str) -> str:
     """Check the CSV against the dataset provenance tag."""
     actual_sha = sha256_of(dataset)
     if actual_sha != expected_sha:
-        raise RuntimeError(
-            f"Dataset mismatch: file sha256 {actual_sha} != tag {expected_sha}"
-        )
+        raise RuntimeError(f"Dataset mismatch: file sha256 {actual_sha} != tag {expected_sha}")
     print(f"Dataset verificato: {dataset.name} sha256 {actual_sha[:12]}...")
     return actual_sha
 
 
 def load_feature_names(client: MlflowClient, run_id: str) -> list:
     """Download the feature list logged by the training run."""
-    tmp_names = Path("/tmp/reference-feature-names.json")
-    client.download_artifacts(run_id, "metadata/feature_names.json", "/tmp")
-    feature_names = json.loads(tmp_names.read_text(encoding="utf-8"))["feature_names"]
+    with tempfile.TemporaryDirectory(prefix="reference-features-") as tmp_dir:
+        local_path = client.download_artifacts(
+            run_id,
+            "metadata/feature_names.json",
+            tmp_dir,
+        )
+        payload = json.loads(Path(local_path).read_text(encoding="utf-8"))
+        feature_names = payload["feature_names"]
+
     print(f"Feature dal run: {len(feature_names)}")
     return feature_names
+
+
+def prepare_reference_features(df: pd.DataFrame, feature_names: list) -> pd.DataFrame:
+    """Apply the same preprocessing used by the training pipeline."""
+    df = df.drop(columns=["Date"])
+    df = pd.get_dummies(
+        df,
+        columns=["Seasons", "Holiday", "Functioning Day"],
+        drop_first=True,
+    )
+
+    missing = [name for name in feature_names if name not in df.columns]
+    if missing:
+        raise RuntimeError(f"Colonne mancanti dopo il preprocessing: {missing}")
+
+    # Garantisce ordine e presenza esatta delle feature del modello.
+    return df[feature_names].astype(float)
 
 
 def compute_stats(df: pd.DataFrame, feature_names: list, predictions) -> dict:
@@ -84,9 +107,7 @@ def compute_stats(df: pd.DataFrame, feature_names: list, predictions) -> dict:
 def write_outputs(output_dir: Path, model: str, alias: str, version, run, sha: str, rows: int, stats: dict) -> None:
     """Write reference statistics and provenance lock."""
     output_dir.mkdir(parents=True, exist_ok=True)
-    (output_dir / "reference-stats.json").write_text(
-        json.dumps(stats, indent=1), encoding="utf-8"
-    )
+    (output_dir / "reference-stats.json").write_text(json.dumps(stats, indent=1), encoding="utf-8")
     lock = {
         "registered_model": model,
         "requested_alias": alias,
@@ -97,12 +118,10 @@ def write_outputs(output_dir: Path, model: str, alias: str, version, run, sha: s
             "sha256": sha,
             "rows": rows,
         },
-        "built_at": datetime.now(timezone.utc).isoformat(),
+        "built_at": datetime.now(UTC).isoformat(),
         "files": ["reference-stats.json"],
     }
-    (output_dir / "reference.lock.json").write_text(
-        json.dumps(lock, indent=1), encoding="utf-8"
-    )
+    (output_dir / "reference.lock.json").write_text(json.dumps(lock, indent=1), encoding="utf-8")
     print(f"Reference scritta in {output_dir}: versione {version.version}")
 
 
@@ -126,15 +145,13 @@ def main() -> None:
 
     model = mlflow.sklearn.load_model(f"models:/{args.model}/{version.version}")
     df = pd.read_csv(args.dataset)
-    missing = [c for c in feature_names if c not in df.columns]
-    if missing:
-        raise RuntimeError(f"Colonne mancanti nel CSV: {missing}")
+    X_reference = prepare_reference_features(df, feature_names)
 
-    predictions = model.predict(df[feature_names])
+    predictions = model.predict(X_reference)
     print(f"Predizioni ricalcolate: {len(predictions)}")
 
-    stats = compute_stats(df, feature_names, predictions)
-    write_outputs(args.output_dir, args.model, args.alias, version, run, actual_sha, len(df), stats)
+    stats = compute_stats(X_reference, feature_names, predictions)
+    write_outputs(args.output_dir, args.model, args.alias, version, run, actual_sha, len(X_reference), stats)
 
 
 if __name__ == "__main__":
