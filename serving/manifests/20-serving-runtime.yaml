@@ -19,13 +19,19 @@ spec:
       imagePullPolicy: IfNotPresent
       env:
         - name: MLSERVER_MODEL_IMPLEMENTATION
-          value: "{{.Labels.modelClass}}"
+          value: "logging_runtime.LoggingMLflowRuntime"
         - name: MLSERVER_HTTP_PORT
           value: "8080"
         - name: MLSERVER_GRPC_PORT
           value: "9000"
         - name: MLFLOW_TRACKING_URI
           value: "sqlite:////tmp/mlflow.db"
+        - name: MODEL_NAME
+          value: "gp-mof-capstone-model"
+        - name: MODEL_VERSION
+          value: "1"
+        - name: LOG_SAMPLE_RATE
+          value: "1.0"
       ports:
         - containerPort: 8080
           name: http

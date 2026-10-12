@@ -31,6 +31,7 @@ Only these static directories are synchronized:
   - config/
   - manifests/
   - scripts/
+  - src/
 
 The runtime/ directory is deliberately never copied, deleted or modified.
 USAGE
@@ -74,6 +75,7 @@ required_directories=(
   "config"
   "manifests"
   "scripts"
+  "src"
 )
 
 # Declare root-level static files that must be copied individually.
@@ -130,6 +132,7 @@ done < <(
     "${TARGET_SERVING}/config" \
     "${TARGET_SERVING}/manifests" \
     "${TARGET_SERVING}/scripts" \
+    "${TARGET_SERVING}/src" \
     -type f \
     \( \
       -name '*.sh' -o \

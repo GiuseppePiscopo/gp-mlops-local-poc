@@ -23,6 +23,10 @@ RUN python -m pip install --upgrade \
 
 WORKDIR /mnt/models
 
+COPY src/logging_runtime.py /opt/logging/logging_runtime.py
+
+ENV PYTHONPATH=/opt/logging
+
 EXPOSE 8080 8081
 
 CMD ["mlserver", "start", "/mnt/models"]
