@@ -6,6 +6,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 DAY="${1:-$(date +%F)}"
+INSTANCE="${2:-${DAY}}"
 DRIFT_FILE="/tmp/drift-metrics-${DAY}.json"
 REFERENCE_LOCK="${SCRIPT_DIR}/../reference/reference.lock.json"
 PUSHGATEWAY_URL="${PUSHGATEWAY_URL:-http://127.0.0.1:9091}"
@@ -24,9 +25,9 @@ fi
 python3 "${SCRIPT_DIR}/render-drift-metrics.py" \
   --drift "${DRIFT_FILE}" \
   --reference-lock "${REFERENCE_LOCK}" \
-  --instance "${DAY}" \
+  --instance "${INSTANCE}" \
   | curl --fail --silent --show-error \
     --data-binary @- \
-    "${PUSHGATEWAY_URL}/metrics/job/${JOB_NAME}/instance/${DAY}"
+    "${PUSHGATEWAY_URL}/metrics/job/${JOB_NAME}/instance/${INSTANCE}"
 
-echo "Metriche pushate su ${PUSHGATEWAY_URL}: job=${JOB_NAME}, instance=${DAY}"
+echo "Metriche pushate su ${PUSHGATEWAY_URL}: job=${JOB_NAME}, instance=${INSTANCE}"

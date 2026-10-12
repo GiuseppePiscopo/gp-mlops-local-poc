@@ -252,6 +252,40 @@ I pannelli attesi sono quattro: PSI per feature, prediction drift, PSI
 massimo e campioni nel batch (le query esatte sono nel file JSON versionato;
 nel browser si leggono da ciascun pannello con `Inspect > Query`).
 
+## Esercizio facoltativo: traffico perturbato
+
+Per provare la pipeline con un drift artificiale, inviare richieste con feature
+spostate:
+
+```bash
+python3 /opt/mlops-local-poc/prometheus/scripts/send-perturbed-traffic.py \
+  --request /opt/mlops-local-poc/serving/runtime/infer-request.json \
+  --count 200 --shift 'Temperature(°C)=10' --shift Hour=12
+```
+
+Poi esportare, ricalcolare e pushare con instance distinta da quella
+giornaliera:
+
+```bash
+bash /opt/mlops-local-poc/model-quality/scripts/export-logs.sh
+bash /opt/mlops-local-poc/model-quality/scripts/compute-drift.sh 2026-10-12
+bash /opt/mlops-local-poc/model-quality/scripts/push-drift-metrics.sh 2026-10-12 2026-10-12-drift-demo
+```
+
+Caveat: con batch di poche decine di righe identiche contro un reference di
+8760 righe varie, il PSI satura (~10) sia nel baseline che nel batch
+perturbato — il confronto non mostra un contrasto visivo. Un contrasto reale
+richiederebbe un baseline di centinaia di richieste varie. Per rendersene
+conto, confrontare le due instance:
+
+```bash
+curl -s -G 'http://127.0.0.1:9090/api/v1/query' --data-urlencode 'query=model_quality_output_psi' \
+  | python3 -c "import json,sys; d=json.load(sys.stdin); [print(r['metric'].get('instance'), '=', r['value'][1]) for r in d['data']['result']]"
+```
+
+Se i valori delle due instance sono dello stesso ordine di grandezza, il batch
+perturbato non emerge dal baseline.
+
 Terminati i controlli, interrompere i port-forward con `Ctrl+C`.
 
 ## Limiti
