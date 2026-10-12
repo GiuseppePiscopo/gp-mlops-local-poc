@@ -109,7 +109,7 @@ Eseguire lo script di normalizzazione di proprietario e permessi incluso nel rep
 ```bash
 cd /opt/mlops-local-poc/mlflow
 
-bash tools/set-permissions.sh
+bash scripts/set-permissions.sh
 ```
 
 Convertire i file di testo da CRLF a LF:
@@ -381,7 +381,7 @@ cd /opt/mlops-local-poc/mlflow
 docker run --rm \
   --network mlops-local-network \
   -e MLFLOW_TRACKING_URI=http://mlflow:5000 \
-  --mount type=bind,src="$(pwd)/tools/smoke_test_tracking.py",dst=/opt/mlops/smoke_test_tracking.py,readonly \
+  --mount type=bind,src="$(pwd)/scripts/smoke_test_tracking.py",dst=/opt/mlops/smoke_test_tracking.py,readonly \
   --entrypoint python \
   ghcr.io/mlflow/mlflow:v3.14.0-full \
   /opt/mlops/smoke_test_tracking.py
@@ -524,7 +524,7 @@ docker run --rm \
   --network mlops-local-network \
   -e MLFLOW_TRACKING_URI=http://mlflow:5000 \
   -e MLFLOW_SMOKE_RUN_ID="$MLFLOW_SMOKE_RUN_ID" \
-  --mount type=bind,src="$(pwd)/tools/verify_smoke_test_tracking.py",dst=/opt/mlops/verify_smoke_test_tracking.py,readonly \
+  --mount type=bind,src="$(pwd)/scripts/verify_smoke_test_tracking.py",dst=/opt/mlops/verify_smoke_test_tracking.py,readonly \
   --entrypoint python \
   ghcr.io/mlflow/mlflow:v3.14.0-full \
   /opt/mlops/verify_smoke_test_tracking.py
@@ -577,21 +577,21 @@ docker compose --env-file .env start
 ## Backup periodico del registry
 
 Come seconda rete, prima di chiudere il lab attivare il backup periodico con
-`tools/backup-postgres.sh`: dump in `data/postgres-backups/`, solo WSL.
+`scripts/backup-postgres.sh`: dump in `data/postgres-backups/`, solo WSL.
 
 Sincronizzare lo script in WSL e verificarne i permessi:
 
 ```bash
-cp /mnt/c/<PERCORSO_REPOSITORY>/mlops-local-poc/mlflow/tools/backup-postgres.sh \
-  /opt/mlops-local-poc/mlflow/tools/backup-postgres.sh
+cp /mnt/c/<PERCORSO_REPOSITORY>/mlops-local-poc/mlflow/scripts/backup-postgres.sh \
+  /opt/mlops-local-poc/mlflow/scripts/backup-postgres.sh
 
-chmod 755 /opt/mlops-local-poc/mlflow/tools/backup-postgres.sh
+chmod 755 /opt/mlops-local-poc/mlflow/scripts/backup-postgres.sh
 ```
 
 Eseguire il primo dump manuale e controllare che riesca:
 
 ```bash
-/opt/mlops-local-poc/mlflow/tools/backup-postgres.sh
+/opt/mlops-local-poc/mlflow/scripts/backup-postgres.sh
 
 ls -lh /opt/mlops-local-poc/mlflow/data/postgres-backups/
 ```
@@ -603,7 +603,7 @@ Schedulazione via cron (cron gira via systemd anche a terminale chiuso).
 Aggiungere con `crontab -e`:
 
 ```text
-*/30 * * * * /opt/mlops-local-poc/mlflow/tools/backup-postgres.sh >> /opt/mlops-local-poc/mlflow/data/postgres-backups/cron.log 2>&1
+*/30 * * * * /opt/mlops-local-poc/mlflow/scripts/backup-postgres.sh >> /opt/mlops-local-poc/mlflow/data/postgres-backups/cron.log 2>&1
 ```
 
 Verificare che la riga sia registrata:

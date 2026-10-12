@@ -16,9 +16,9 @@
 #     un dump verificato (dimensione minima + pg_restore --list OK).
 #
 # Uso manuale:
-#   /opt/mlops-local-poc/mlflow/tools/backup-postgres.sh
+#   /opt/mlops-local-poc/mlflow/scripts/backup-postgres.sh
 # Uso da cron (ogni 30 minuti, log in data/postgres-backups/cron.log):
-#   */30 * * * * /opt/mlops-local-poc/mlflow/tools/backup-postgres.sh >> /opt/mlops-local-poc/mlflow/data/postgres-backups/cron.log 2>&1
+#   */30 * * * * /opt/mlops-local-poc/mlflow/scripts/backup-postgres.sh >> /opt/mlops-local-poc/mlflow/data/postgres-backups/cron.log 2>&1
 #
 # Restore (manuale, a stack fermo per mlflow):
 #   cd /opt/mlops-local-poc/mlflow
