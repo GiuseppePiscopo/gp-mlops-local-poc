@@ -65,68 +65,24 @@ Il file Compose espone i servizi soltanto sul loopback WSL:
 
 ## Copiare il repository in WSL
 
-Le operazioni Docker Compose e i bind mount devono essere eseguiti dal filesystem Linux WSL, non da `/mnt/c/...`. 
+Le operazioni Docker Compose e i bind mount devono essere eseguiti dal filesystem Linux WSL, non da `/mnt/c/...`.
 
-Impostare le directory sorgente e destinazione:
-
-```bash
-WINDOWS_MLFLOW_DIR='/mnt/c/<PERCORSO_REPOSITORY>/mlops-local-poc/mlflow'
-DEPLOY_DIR='/opt/mlops-local-poc/mlflow'
-```
-
-Creare la directory runtime e copiare i file statici del repository:
+Sincronizzare i file statici dal repository con lo script dedicato (stessa
+tecnica degli altri lab). Alla prima installazione creare prima la directory
+runtime e sistemarne il proprietario:
 
 ```bash
-sudo mkdir -p "$DEPLOY_DIR"
+sudo install -d -o "$USER" -g "$USER" -m 0755 /opt/mlops-local-poc/mlflow
 
-sudo rsync -a --delete \
-  "$WINDOWS_MLFLOW_DIR/" \
-  "$DEPLOY_DIR/"
+cd /mnt/c/<PERCORSO_REPOSITORY>/mlops-local-poc/mlflow
 
-sudo chown -R "$USER":"$USER" /opt/mlops-local-poc
+bash scripts/sync-to-wsl.sh
 ```
 
-Il comando `rsync --delete` è adatto alla prima installazione. In seguito, non deve cancellare accidentalmente file runtime e dati persistenti. Dopo la prima installazione, usare il comando seguente:
-
-```bash
-sudo rsync -a --delete \
-  --exclude='.env' \
-  --exclude='object-store/s3.json' \
-  --exclude='data/' \
-  "$WINDOWS_MLFLOW_DIR/" \
-  "$DEPLOY_DIR/"
-```
-
-Attenzione: `--delete` cancella in WSL tutto ciò che non è nel repository,
-salvo gli exclude. Tenere i file runtime (dump, log, dati) solo sotto `data/`
-o negli altri path esclusi: qualsiasi altra directory creata a mano in WSL
-viene rimossa al successivo re-sync.
-
-## Normalizzare owner, permessi e line ending
-
-Eseguire lo script di normalizzazione di proprietario e permessi incluso nel repository:
-
-```bash
-cd /opt/mlops-local-poc/mlflow
-
-bash scripts/set-permissions.sh
-```
-
-Convertire i file di testo da CRLF a LF:
-
-```bash
-find . -type f \
-  \( \
-    -name '*.sh' -o \
-    -name '*.yaml' -o \
-    -name '*.yml' -o \
-    -name '*.json' -o \
-    -name '*.md' -o \
-    -name '.env' -o \
-    -name '.env.example' \
-  \) \
-  -exec sed -i 's/\r$//' {} +
-```
+Ai re-sync successivi basta rieseguire lo script: sincronizza solo le sorgenti
+statiche (`scripts/`, `object-store/` senza `s3.json`, `compose.yaml`,
+`.env.example`, `.gitignore`) e non tocca mai `.env`, `object-store/s3.json`
+né `data/`.
 
 ## Creare i file runtime con segreti
 
@@ -577,16 +533,8 @@ docker compose --env-file .env start
 ## Backup periodico del registry
 
 Come seconda rete, prima di chiudere il lab attivare il backup periodico con
-`scripts/backup-postgres.sh`: dump in `data/postgres-backups/`, solo WSL.
-
-Sincronizzare lo script in WSL e verificarne i permessi:
-
-```bash
-cp /mnt/c/<PERCORSO_REPOSITORY>/mlops-local-poc/mlflow/scripts/backup-postgres.sh \
-  /opt/mlops-local-poc/mlflow/scripts/backup-postgres.sh
-
-chmod 755 /opt/mlops-local-poc/mlflow/scripts/backup-postgres.sh
-```
+`scripts/backup-postgres.sh` (arriva in WSL con la sincronizzazione sopra,
+già con i permessi giusti): dump in `data/postgres-backups/`, solo WSL.
 
 Eseguire il primo dump manuale e controllare che riesca:
 
