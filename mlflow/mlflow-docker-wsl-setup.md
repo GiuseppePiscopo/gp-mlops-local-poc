@@ -28,12 +28,19 @@ La directory runtime WSL usata da questa procedura è:
 /opt/mlops-local-poc/mlflow
 ```
 
-I dati persistenti risiedono nei bind mount:
+I dati persistenti risiedono nel named volume Docker `mlops-local-pgdata`
+(PostgreSQL) e nel bind mount SeaweedFS:
 
 ```text
-/opt/mlops-local-poc/mlflow/data/postgres
-/opt/mlops-local-poc/mlflow/data/seaweedfs
+named volume mlops-local-pgdata -> /var/lib/postgresql/data (PostgreSQL)
+/opt/mlops-local-poc/mlflow/data/seaweedfs (SeaweedFS)
 ```
+
+PostgreSQL usa un named volume e non un bind mount: il volume vive nella VM
+Docker, così un avvio difettoso di Docker Desktop (condivisione WSL non ancora
+pronta, directory vista vuota) non può mai esporre una directory vuota al
+container e innescare un `initdb` che azzera il registry. SeaweedFS resta su
+bind mount perché il suo entrypoint non ha init distruttivi.
 
 Il repository Windows resta invece la sorgente versionata di manifest, template, documentazione e strumenti.
 
@@ -180,29 +187,34 @@ e:
 600 object-store/s3.json
 ```
 
-## Preparare i bind mount dati
+## Preparare la directory dati SeaweedFS
 
-Creare esplicitamente le directory che saranno montate nei container PostgreSQL e SeaweedFS:
+Creare esplicitamente la directory che sarà montata nel container SeaweedFS.
+PostgreSQL non richiede questo passo: il named volume `mlops-local-pgdata`
+dichiarato in `compose.yaml` viene creato automaticamente da Docker al primo
+`docker compose up`.
 
 ```bash
 sudo install -d \
   -o "$USER" \
   -g "$USER" \
   -m 0755 \
-  /opt/mlops-local-poc/mlflow/data/postgres \
   /opt/mlops-local-poc/mlflow/data/seaweedfs
 ```
 
-Verificare le directory persistenti:
+Verificare la directory persistente:
 
 ```bash
 stat -c '%A %a %U:%G %n' \
   /opt/mlops-local-poc/mlflow/data \
-  /opt/mlops-local-poc/mlflow/data/postgres \
   /opt/mlops-local-poc/mlflow/data/seaweedfs
 ```
 
-Controllare che le directory esistano, siano di proprietà dell’utente WSL e abbiano permessi iniziali `755`.
+Controllare che la directory esista, sia di proprietà dell’utente WSL e abbia permessi iniziali `755`. Verificare inoltre il volume PostgreSQL dopo il primo avvio:
+
+```bash
+docker volume inspect mlops-local-pgdata --format 'volume={{.Name}}'
+```
 
 ## Validare Docker Compose
 
@@ -568,7 +580,7 @@ Al termine della procedura risultano verificati:
 - SeaweedFS come object store S3-compatible;
 - bucket `mlflow-artifacts`;
 - artifact proxy MLflow;
-- persistenza PostgreSQL e SeaweedFS nei bind mount sotto `/opt`;
+- persistenza PostgreSQL nel named volume `mlops-local-pgdata` e SeaweedFS nel bind mount sotto `/opt`;
 - ciclo Compose `stop` → `start`;
 - tracking tecnico end-to-end di parametri, tag e artefatti;
 - recupero di un artefatto tramite MLflow dopo restart.

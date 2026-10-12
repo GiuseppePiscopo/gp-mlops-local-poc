@@ -12,9 +12,10 @@ services:
     ports:
       - "127.0.0.1:${POSTGRES_HOST_PORT}:5432"
     volumes:
-      - type: bind
-        source: ./data/postgres
-        target: /var/lib/postgresql/data
+      # Named volume (not a bind mount): stored inside the Docker VM, so a dirty
+      # Docker Desktop/WSL start can never expose an empty dir and trigger an
+      # initdb wipe of the registry. Backups stay host-side via pg_dump.
+      - pgdata:/var/lib/postgresql/data
     healthcheck:
       test:
         - CMD-SHELL
@@ -94,3 +95,7 @@ services:
 networks:
   mlops-network:
     name: mlops-local-network
+
+volumes:
+  pgdata:
+    name: mlops-local-pgdata
