@@ -36,11 +36,9 @@ named volume mlops-local-pgdata -> /var/lib/postgresql/data (PostgreSQL)
 /opt/mlops-local-poc/mlflow/data/seaweedfs (SeaweedFS)
 ```
 
-PostgreSQL usa un named volume e non un bind mount: il volume vive nella VM
-Docker, così un avvio difettoso di Docker Desktop (condivisione WSL non ancora
-pronta, directory vista vuota) non può mai esporre una directory vuota al
-container e innescare un `initdb` che azzera il registry. SeaweedFS resta su
-bind mount perché il suo entrypoint non ha init distruttivi.
+PostgreSQL usa un named volume nella VM Docker (al riparo dall'`initdb` che
+azzera il registry dopo un avvio difettoso di Docker Desktop); SeaweedFS resta
+su bind mount.
 
 Il repository Windows resta invece la sorgente versionata di manifest, template, documentazione e strumenti.
 
@@ -98,6 +96,11 @@ sudo rsync -a --delete \
   "$WINDOWS_MLFLOW_DIR/" \
   "$DEPLOY_DIR/"
 ```
+
+Attenzione: `--delete` cancella in WSL tutto ciò che non è nel repository,
+salvo gli exclude. Tenere i file runtime (dump, log, dati) solo sotto `data/`
+o negli altri path esclusi: qualsiasi altra directory creata a mano in WSL
+viene rimossa al successivo re-sync.
 
 ## Normalizzare owner, permessi e line ending
 
@@ -571,6 +574,68 @@ Riavviare i container già esistenti:
 docker compose --env-file .env start
 ```
 
+## Backup periodico del registry
+
+Come seconda rete, prima di chiudere il lab attivare il backup periodico con
+`tools/backup-postgres.sh`: dump in `data/postgres-backups/`, solo WSL.
+
+Sincronizzare lo script in WSL e verificarne i permessi:
+
+```bash
+cp /mnt/c/<PERCORSO_REPOSITORY>/mlops-local-poc/mlflow/tools/backup-postgres.sh \
+  /opt/mlops-local-poc/mlflow/tools/backup-postgres.sh
+
+chmod 755 /opt/mlops-local-poc/mlflow/tools/backup-postgres.sh
+```
+
+Eseguire il primo dump manuale e controllare che riesca:
+
+```bash
+/opt/mlops-local-poc/mlflow/tools/backup-postgres.sh
+
+ls -lh /opt/mlops-local-poc/mlflow/data/postgres-backups/
+```
+
+L'output deve terminare con `OK:` e la directory deve contenere il file
+`mlflow-<data>-<ora>.dump`.
+
+Schedulazione via cron (cron gira via systemd anche a terminale chiuso).
+Aggiungere con `crontab -e`:
+
+```text
+*/30 * * * * /opt/mlops-local-poc/mlflow/tools/backup-postgres.sh >> /opt/mlops-local-poc/mlflow/data/postgres-backups/cron.log 2>&1
+```
+
+Verificare che la riga sia registrata:
+
+```bash
+crontab -l
+```
+
+## Restore del registry da un dump (solo se necessario)
+
+Solo in caso di perdita o corruzione del registry. Fermare solo `mlflow`,
+PostgreSQL resta attivo:
+
+```bash
+cd /opt/mlops-local-poc/mlflow
+
+docker compose --env-file .env stop mlflow
+
+docker cp data/postgres-backups/<file>.dump mlops-postgres:/tmp/restore.dump
+
+docker exec mlops-postgres pg_restore -U mlflow -d mlflow --clean --if-exists /tmp/restore.dump
+
+docker compose --env-file .env start mlflow
+
+curl --fail --silent --show-error \
+  -H 'Host: localhost:5000' \
+  'http://127.0.0.1:5000/api/2.0/mlflow/registered-models/get?name=gp-mof-capstone-model'
+```
+
+Controllare che la risposta elenchi modello registrato, versioni e alias
+attesi, poi ripetere le verifiche di tracking e inferenza dei lab a valle.
+
 ## Stato finale della fase
 
 Al termine della procedura risultano verificati:
@@ -582,6 +647,7 @@ Al termine della procedura risultano verificati:
 - artifact proxy MLflow;
 - persistenza PostgreSQL nel named volume `mlops-local-pgdata` e SeaweedFS nel bind mount sotto `/opt`;
 - ciclo Compose `stop` → `start`;
+- backup periodico del registry configurato (primo dump verificato, cron attiva);
 - tracking tecnico end-to-end di parametri, tag e artefatti;
 - recupero di un artefatto tramite MLflow dopo restart.
 
