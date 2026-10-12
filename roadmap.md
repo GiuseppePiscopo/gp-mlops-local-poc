@@ -56,4 +56,5 @@ All'interno di questa fase, gli 8 passaggi concettuali della "vertical slice" er
 - **CI/CD** — automazione di build delle immagini, training, registrazione, rendering e applicazione del manifest
 - **Promozione e rollback** — cambio controllato della versione servita, rilascio graduale e ritorno alla versione precedente (rollback automatico)
 - **Riaddestramento** — trigger da monitoring o da nuovi dati, con nuova versione nel Model Registry
+- **Alerting** — soglie sulle metriche di drift e qualità, notifiche e trigger automatici
 - **Esposizione e sicurezza** — accesso al servizio senza port-forward manuale, autenticazione, gestione dei segreti

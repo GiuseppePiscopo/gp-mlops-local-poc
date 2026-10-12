@@ -10,4 +10,6 @@ RUN python -m pip install --upgrade \
     && python -m pip install \
       -r /requirements.txt
 
+COPY scripts/ /scripts/
+
 WORKDIR /scripts

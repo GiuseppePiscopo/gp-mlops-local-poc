@@ -89,12 +89,8 @@ def parse_arguments() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def main() -> None:
-    args = parse_arguments()
-
-    reference = json.loads((args.reference / "reference-stats.json").read_text(encoding="utf-8"))
-    records = read_records(args.input)
-
+def compute_drift_metrics(reference: dict, records: list[dict]) -> dict:
+    """Compute sample count and PSI metrics of records against the reference."""
     if not records:
         raise RuntimeError("Nessun record di inferenza nel file di input")
 
@@ -106,13 +102,21 @@ def main() -> None:
             raise RuntimeError(f"Feature mancante nei log correnti: {name}")
         feature_metrics[name] = feature_psi(spec["bin_edges"], current_features[name])
 
-    metrics = {
+    return {
         "generated_at": datetime.now(UTC).isoformat(),
         "sample_count": int(len(current_predictions)),
         "features": feature_metrics,
         "output_psi": output_psi(reference["output"]["quantiles"], current_predictions),
         "max_feature_psi": max(feature_metrics.values()),
     }
+
+
+def main() -> None:
+    args = parse_arguments()
+
+    reference = json.loads((args.reference / "reference-stats.json").read_text(encoding="utf-8"))
+    records = read_records(args.input)
+    metrics = compute_drift_metrics(reference, records)
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(metrics, indent=2, ensure_ascii=False), encoding="utf-8")

@@ -48,7 +48,11 @@ Devono essere presenti almeno:
 /opt/mlops-local-poc/model-quality/config/export.env
 /opt/mlops-local-poc/model-quality/requirements.txt
 /opt/mlops-local-poc/model-quality/dashboards/model-quality-drift-dashboard.json
+/opt/mlops-local-poc/model-quality/manifests/10-serviceaccount.yaml
+/opt/mlops-local-poc/model-quality/manifests/11-log-reader-rbac.yaml
+/opt/mlops-local-poc/model-quality/manifests/20-drift-cronjob.yaml
 /opt/mlops-local-poc/model-quality/scripts/apply-dashboard.sh
+/opt/mlops-local-poc/model-quality/scripts/apply-s3-secret.sh
 /opt/mlops-local-poc/model-quality/scripts/build-reference.py
 /opt/mlops-local-poc/model-quality/scripts/build-reference.sh
 /opt/mlops-local-poc/model-quality/scripts/compute-drift.py
@@ -56,7 +60,7 @@ Devono essere presenti almeno:
 /opt/mlops-local-poc/model-quality/scripts/filter-log-records.py
 /opt/mlops-local-poc/model-quality/scripts/push-drift-metrics.sh
 /opt/mlops-local-poc/model-quality/scripts/render-drift-metrics.py
-/opt/mlops-local-poc/model-quality/scripts/verify-logs.sh
+/opt/mlops-local-poc/model-quality/scripts/run-drift-batch.py
 ```
 
 Lo stack MLflow/PostgreSQL/SeaweedFS deve essere attivo:
@@ -147,8 +151,7 @@ dataset usati.
 
 ## Calcolare il drift
 
-Il calcolo gira nell'immagine dedicata (numpy e pandas pinnati). Costruirla
-una volta:
+Il calcolo gira nell'immagine dedicata. Costruirla una volta:
 
 ```bash
 cd /opt/mlops-local-poc/model-quality && ./scripts/build-image.sh
@@ -200,6 +203,37 @@ curl -sS 'http://127.0.0.1:9090/api/v1/query?query=model_quality_max_feature_psi
 
 Atteso: `status: success` con almeno una serie con label del modello servito.
 
+## Schedulare il batch con CronJob
+
+Il `CronJob` esegue ogni notte lo stesso batch (legge i log via API, scarica
+il reference da S3, calcola e pusha) senza passare da WSL. Richiede l'immagine
+del componente nel nodo e un Secret con le credenziali S3 (l'IP di SeaweedFS
+cambia a ogni ricreazione dello stack: ricreare il Secret in quel caso):
+
+```bash
+kind load docker-image gp-mof-capstone-drift:dev --name mlops-test
+bash /opt/mlops-local-poc/model-quality/scripts/apply-s3-secret.sh
+kubectl --context kind-mlops-test apply -f /opt/mlops-local-poc/model-quality/manifests/
+```
+
+Verificare gli oggetti:
+
+```bash
+kubectl --context kind-mlops-test -n monitoring get cronjob model-quality-drift
+```
+
+Eseguire subito un batch manuale dal `CronJob`, senza attendere la schedule:
+
+```bash
+kubectl --context kind-mlops-test -n monitoring \
+  create job --from=cronjob/model-quality-drift drift-manual-02
+kubectl --context kind-mlops-test -n monitoring wait --for=condition=complete \
+  job/drift-manual-02 --timeout=300s
+```
+
+Atteso: `condition met`. Il batch usa come instance il giorno precedente
+(UTC); controllare la nuova serie in Prometheus come nel capitolo precedente.
+
 ## Vedere la dashboard
 
 Applicare la dashboard provisionata:
@@ -226,7 +260,6 @@ Terminati i controlli, interrompere i port-forward con `Ctrl+C`.
   truth.
 - L'export è giornaliero e sovrascrive il file della stessa data; non è ancora
   idempotente per esecuzioni multiple.
-- Il calcolo drift è un batch manuale; non è ancora schedulato tramite CronJob.
 - Non sono ancora configurati alerting né trigger di riaddestramento.
 - Il reference è associato esplicitamente alla V1 tramite `reference.lock.json`.
 
@@ -243,6 +276,7 @@ Dopo una modifica alle dipendenze di calcolo:
 
 ```bash
 cd /opt/mlops-local-poc/model-quality && ./scripts/build-image.sh
+kind load docker-image gp-mof-capstone-drift:dev --name mlops-test
 ```
 
 Per ricalcolare il drift su un batch (dopo nuovo export):
@@ -261,5 +295,7 @@ Al termine della procedura risultano verificati:
   `s3://mlops-logs/reference/model=v1/`;
 - metriche `model_quality_*` (PSI per feature, PSI output, massimo, campioni)
   interrogabili in Prometheus;
+- `CronJob` giornaliero con batch manuale di prova completato e nuova instance
+  in Prometheus;
 - dashboard **Model Quality - Drift** provisionata in Grafana, con pannelli
   popolati.

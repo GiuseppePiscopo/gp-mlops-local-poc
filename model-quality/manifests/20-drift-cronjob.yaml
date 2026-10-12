@@ -1,0 +1,49 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: model-quality-drift
+  namespace: monitoring
+spec:
+  schedule: "0 2 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: model-quality-drift
+          restartPolicy: OnFailure
+          containers:
+            - name: drift-batch
+              image: gp-mof-capstone-drift:dev
+              imagePullPolicy: IfNotPresent
+              command: ["python", "/scripts/run-drift-batch.py"]
+              env:
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: model-quality-s3
+                      key: AWS_ACCESS_KEY_ID
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: model-quality-s3
+                      key: AWS_SECRET_ACCESS_KEY
+                - name: AWS_DEFAULT_REGION
+                  valueFrom:
+                    secretKeyRef:
+                      name: model-quality-s3
+                      key: AWS_DEFAULT_REGION
+                - name: S3_ENDPOINT_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: model-quality-s3
+                      key: S3_ENDPOINT_URL
+                - name: LOG_BUCKET
+                  value: "mlops-logs"
+                - name: REFERENCE_PREFIX
+                  value: "reference/model=v1"
+                - name: PUSHGATEWAY_URL
+                  value: "http://mlops-pushgateway.monitoring.svc.cluster.local:9091"
+                - name: SERVING_NAMESPACE
+                  value: "gp-mof-capstone-serving"
+                - name: POD_LABEL
+                  value: "app=isvc.gp-mof-capstone-model-predictor"

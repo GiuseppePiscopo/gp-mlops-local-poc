@@ -14,12 +14,8 @@ def parse_arguments() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def main() -> None:
-    args = parse_arguments()
-
-    drift = json.loads(args.drift.read_text(encoding="utf-8"))
-    lock = json.loads(args.reference_lock.read_text(encoding="utf-8"))
-
+def render_exposition(drift: dict, lock: dict, instance: str) -> str:
+    """Render drift metrics and lock provenance as Prometheus exposition."""
     labels = {
         "model": lock["registered_model"],
         "version": lock["resolved_version"],
@@ -50,7 +46,16 @@ def main() -> None:
         ]
     )
 
-    print("\n".join(lines))
+    return "\n".join(lines)
+
+
+def main() -> None:
+    args = parse_arguments()
+
+    drift = json.loads(args.drift.read_text(encoding="utf-8"))
+    lock = json.loads(args.reference_lock.read_text(encoding="utf-8"))
+
+    print(render_exposition(drift, lock, args.instance))
 
 
 if __name__ == "__main__":

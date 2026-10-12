@@ -1,0 +1,23 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: model-quality-log-reader
+  namespace: gp-mof-capstone-serving
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: model-quality-log-reader
+  namespace: gp-mof-capstone-serving
+subjects:
+  - kind: ServiceAccount
+    name: model-quality-drift
+    namespace: monitoring
+roleRef:
+  kind: Role
+  name: model-quality-log-reader
+  apiGroup: rbac.authorization.k8s.io
