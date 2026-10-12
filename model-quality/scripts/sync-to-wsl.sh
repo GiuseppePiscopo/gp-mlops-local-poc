@@ -75,9 +75,23 @@ required_directories=(
   "scripts"
 )
 
+# Declare root-level static files that must be copied individually.
+required_files=(
+  "Dockerfile"
+  "requirements.txt"
+)
+
 for directory in "${required_directories[@]}"; do
   if [[ ! -d "${SOURCE_COMPONENT}/${directory}" ]]; then
     echo "Required source directory not found: ${SOURCE_COMPONENT}/${directory}" >&2
+    exit 1
+  fi
+done
+
+# Validate that every required root-level source file exists.
+for file in "${required_files[@]}"; do
+  if [[ ! -f "${SOURCE_COMPONENT}/${file}" ]]; then
+    echo "Required source file not found: ${SOURCE_COMPONENT}/${file}" >&2
     exit 1
   fi
 done
@@ -91,6 +105,18 @@ for directory in "${required_directories[@]}"; do
   rsync -a --delete \
     "${SOURCE_COMPONENT}/${directory}/" \
     "${TARGET_COMPONENT}/${directory}/"
+done
+
+# Copy only the explicit root-level static files.
+for file in "${required_files[@]}"; do
+  rsync -a \
+    "${SOURCE_COMPONENT}/${file}" \
+    "${TARGET_COMPONENT}/${file}"
+done
+
+# Normalize root-level static text files to Unix LF line endings.
+for file in "${required_files[@]}"; do
+  sed -i 's/\r$//' "${TARGET_COMPONENT}/${file}"
 done
 
 while IFS= read -r -d '' file; do

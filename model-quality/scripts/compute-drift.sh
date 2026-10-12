@@ -20,6 +20,7 @@ DAY="${1:-$(date +%F)}"
 REFERENCE_DIR="${SCRIPT_DIR}/../reference"
 OUTPUT_FILE="/tmp/drift-metrics-${DAY}.json"
 INPUT_FILE="/tmp/current-inference-${DAY}.jsonl"
+IMAGE_TAG="${IMAGE_TAG:-gp-mof-capstone-drift:dev}"
 
 set -a
 # shellcheck disable=SC1090
@@ -49,19 +50,20 @@ docker run --rm \
   --endpoint-url "http://${seaweedfs_ip}:${SEAWEEDFS_S3_PORT}" \
   s3 cp "${S3_OBJECT}" "/data/$(basename "${INPUT_FILE}")"
 
-DRIFT_COMMAND="
-pip install --quiet numpy==1.26.4 pandas==2.2.3 &&
-python /scripts/compute-drift.py \
-  --input /data/$(basename "${INPUT_FILE}") \
-  --reference /reference \
-  --output /data/$(basename "${OUTPUT_FILE}")
-"
+if ! docker image inspect "${IMAGE_TAG}" >/dev/null 2>&1; then
+  echo "Immagine non trovata: ${IMAGE_TAG}" >&2
+  echo "Costruirla con scripts/build-image.sh prima di calcolare il drift." >&2
+  exit 1
+fi
 
 docker run --rm \
   -v "${SCRIPT_DIR}:/scripts:ro" \
   -v "${REFERENCE_DIR}:/reference:ro" \
   -v /tmp:/data \
-  python:3.11-slim \
-  sh -c "${DRIFT_COMMAND}"
+  "${IMAGE_TAG}" \
+  python /scripts/compute-drift.py \
+    --input "/data/$(basename "${INPUT_FILE}")" \
+    --reference /reference \
+    --output "/data/$(basename "${OUTPUT_FILE}")"
 
 cat "${OUTPUT_FILE}"

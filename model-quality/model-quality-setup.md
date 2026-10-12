@@ -44,7 +44,9 @@ find /opt/mlops-local-poc/model-quality -maxdepth 2 -type f | sort
 Devono essere presenti almeno:
 
 ```text
+/opt/mlops-local-poc/model-quality/Dockerfile
 /opt/mlops-local-poc/model-quality/config/export.env
+/opt/mlops-local-poc/model-quality/requirements.txt
 /opt/mlops-local-poc/model-quality/dashboards/model-quality-drift-dashboard.json
 /opt/mlops-local-poc/model-quality/scripts/apply-dashboard.sh
 /opt/mlops-local-poc/model-quality/scripts/build-reference.py
@@ -145,6 +147,13 @@ dataset usati.
 
 ## Calcolare il drift
 
+Il calcolo gira nell'immagine dedicata (numpy e pandas pinnati). Costruirla
+una volta:
+
+```bash
+cd /opt/mlops-local-poc/model-quality && ./scripts/build-image.sh
+```
+
 Scaricare il batch della data indicata e calcolare il PSI di feature e output
 (formato data `YYYY-MM-DD`, default oggi):
 
@@ -228,6 +237,12 @@ Dopo una modifica ai file nel repository Windows:
 ```bash
 bash "${REPO}/model-quality/scripts/sync-to-wsl.sh"
 bash /opt/mlops-local-poc/model-quality/scripts/apply-dashboard.sh
+```
+
+Dopo una modifica alle dipendenze di calcolo:
+
+```bash
+cd /opt/mlops-local-poc/model-quality && ./scripts/build-image.sh
 ```
 
 Per ricalcolare il drift su un batch (dopo nuovo export):
