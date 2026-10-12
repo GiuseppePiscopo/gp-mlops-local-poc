@@ -254,13 +254,12 @@ nel browser si leggono da ciascun pannello con `Inspect > Query`).
 
 Terminati i controlli, interrompere i port-forward con `Ctrl+C`.
 
-## Limiti e sviluppi successivi
+## Limiti
 
 - Il monitoring è non supervisionato: non valuta la qualità rispetto a ground
   truth.
 - L'export è giornaliero e sovrascrive il file della stessa data; non è ancora
   idempotente per esecuzioni multiple.
-- Non sono ancora configurati alerting né trigger di riaddestramento.
 - Il reference è associato esplicitamente alla V1 tramite `reference.lock.json`.
 
 ## Sequenza operativa ordinaria

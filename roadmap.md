@@ -40,16 +40,13 @@ All'interno di questa fase, gli 8 passaggi concettuali della "vertical slice" er
 - Runtime MLServer custom (`LoggingMLflowRuntime`) che registra ogni inferenza in JSONL su stdout: feature, predizioni, timestamp, versione e request id ([procedura](inference-logging/request-response-logging.md)).
 - Campionamento via `LOG_SAMPLE_RATE`, retention affidata alla rotation di kubelet; formato pronto per la conversione in Parquet nel lab di qualità.
 
+**Monitoring della qualità del modello** *(completato)*
+- Export giornaliero dei log su SeaweedFS, reference dataset V1 versionato con lock, calcolo PSI su feature e predizioni ([procedura](model-quality/model-quality-setup.md)).
+- Batch schedulato con `CronJob` giornaliero, metriche `model_quality_*` via Pushgateway in Prometheus e dashboard Grafana del drift.
+
 ## Prossimi sviluppi
 
-**Monitoring** — osservabilità del modello servito, articolata in lab distinti, da dettagliare quando sarà il caso:
-
-1. **Monitoring della qualità del modello** — valutazione periodica di drift e degrado, basata sui log di inferenza:
-   - definizione del reference dataset associato alla versione del modello servita
-   - confronto tra reference dataset e batch correnti di richieste/predizioni
-   - rilevamento di data drift sulle feature e prediction drift sulle uscite del modello
-   - valutazione della qualità effettiva quando diventano disponibili i ground truth
-   - esportazione delle metriche di drift verso Prometheus/Grafana e, in prospettiva, verso alerting o riaddestramento
+Nessuno al momento.
 
 ## Estensioni successive
 
