@@ -3,6 +3,9 @@
 
 Keeps parsed JSON lines carrying a request_id, one record per line.
 Prints the extracted record count to stdout.
+
+NOTE: the filtering logic here and in read_pod_logs() of run-drift-batch.py
+must remain aligned.
 """
 
 import argparse

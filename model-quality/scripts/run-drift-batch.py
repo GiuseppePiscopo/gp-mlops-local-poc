@@ -43,6 +43,8 @@ def parse_arguments() -> argparse.Namespace:
 
 def read_pod_logs(namespace: str, label: str) -> list[dict]:
     """Collect inference records from running predictor pods, deduplicated."""
+    # NOTE: the filtering logic here and in filter-log-records.py (used by export-logs.sh)
+    # must remain aligned.
     config.load_incluster_config()
     api = client.CoreV1Api()
     pods = api.list_namespaced_pod(namespace, label_selector=label)

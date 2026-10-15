@@ -38,7 +38,8 @@ TMPDIR="$(mktemp -d)"
 trap 'rm -rf "${TMPDIR}"' EXIT
 
 DAY="$(date +%F)"
-OUT_FILE="${TMPDIR}/inference-${DAY}.jsonl"
+FILE_NAME="inference-${DAY}.jsonl"
+OUT_FILE="${TMPDIR}/${FILE_NAME}"
 
 POD="$(kubectl --context "${KUBE_CONTEXT}" -n "${KUBERNETES_NAMESPACE}" \
   get pods -l "${POD_LABEL}" \
@@ -71,7 +72,7 @@ fi
 docker image inspect "${AWS_CLI_IMAGE}" >/dev/null 2>&1 \
   || docker pull "${AWS_CLI_IMAGE}"
 
-S3_KEY="s3://${LOG_BUCKET}/${LOG_PREFIX}/date=${DAY}/inference-${DAY}.jsonl"
+S3_KEY="s3://${LOG_BUCKET}/${LOG_PREFIX}/date=${DAY}/${FILE_NAME}"
 
 # Carica il file del giorno su S3.
 docker run --rm \
@@ -82,7 +83,7 @@ docker run --rm \
   -e AWS_DEFAULT_REGION="${S3_REGION}" \
   "${AWS_CLI_IMAGE}" \
   --endpoint-url "http://${seaweedfs_ip}:${SEAWEEDFS_S3_PORT}" \
-  s3 cp "/data/inference-${DAY}.jsonl" "${S3_KEY}"
+  s3 cp "/data/${FILE_NAME}" "${S3_KEY}"
 
 # Elenca il contenuto della partizione per conferma.
 docker run --rm \
