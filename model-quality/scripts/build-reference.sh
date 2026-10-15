@@ -44,6 +44,8 @@ fi
 
 mkdir -p "${OUTPUT_DIR}"
 
+# Esegue il builder nell'immagine MLServer: risolve l'alias, verifica il dataset,
+# ricalcola le predizioni e scrive statistiche e lock in OUTPUT_DIR.
 docker run --rm \
   --network "${SEAWEEDFS_DOCKER_NETWORK}" \
   -e MLFLOW_TRACKING_URI=http://mlflow:5000 \
@@ -64,6 +66,7 @@ docker run --rm \
 VERSION="$(python3 -c "import json; print(json.load(open('${OUTPUT_DIR}/reference.lock.json'))['resolved_version'])")"
 S3_PREFIX="s3://${LOG_BUCKET}/reference/model=v${VERSION}"
 
+# Carica statistiche e lock su S3 sotto il prefisso versionato.
 docker run --rm \
   -v "${OUTPUT_DIR}:/data:ro" \
   --network "${SEAWEEDFS_DOCKER_NETWORK}" \

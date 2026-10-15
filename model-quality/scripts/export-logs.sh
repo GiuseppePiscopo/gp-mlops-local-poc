@@ -73,6 +73,7 @@ docker image inspect "${AWS_CLI_IMAGE}" >/dev/null 2>&1 \
 
 S3_KEY="s3://${LOG_BUCKET}/${LOG_PREFIX}/date=${DAY}/inference-${DAY}.jsonl"
 
+# Carica il file del giorno su S3.
 docker run --rm \
   -v "${TMPDIR}:/data:ro" \
   --network "${SEAWEEDFS_DOCKER_NETWORK}" \
@@ -83,6 +84,7 @@ docker run --rm \
   --endpoint-url "http://${seaweedfs_ip}:${SEAWEEDFS_S3_PORT}" \
   s3 cp "/data/inference-${DAY}.jsonl" "${S3_KEY}"
 
+# Elenca il contenuto della partizione per conferma.
 docker run --rm \
   --network "${SEAWEEDFS_DOCKER_NETWORK}" \
   -e AWS_ACCESS_KEY_ID="${S3_ACCESS_KEY_ID}" \

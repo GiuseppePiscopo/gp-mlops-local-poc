@@ -16,8 +16,6 @@ flusso di label reali.
 - cluster `mlops-test`, contesto `kind-mlops-test`;
 - [request/response logging](../inference-logging/request-response-logging.md)
   completato: predictor con runtime custom e record JSONL nei log;
-- Pushgateway installato nel namespace `monitoring`
-  (`prometheus/config/values-pushgateway.yaml`);
 - repository completo della directory `model-quality/`.
 
 Tutti i comandi si eseguono in un terminale **Bash in WSL**, salvo dove è
@@ -81,6 +79,29 @@ kubectl --context kind-mlops-test -n gp-mof-capstone-serving \
   --field-selector=status.phase=Running
 ```
 
+## Installare Pushgateway
+
+Installare il Pushgateway che riceverà le metriche dei batch:
+
+```bash
+helm --kube-context kind-mlops-test upgrade --install pushgateway \
+  prometheus-community/prometheus-pushgateway --version 3.5.0 \
+  -n monitoring \
+  -f /opt/mlops-local-poc/prometheus/config/values-pushgateway.yaml
+```
+
+Verificare pod e oggetti:
+
+```bash
+kubectl --context kind-mlops-test -n monitoring \
+  get pods -l app.kubernetes.io/name=prometheus-pushgateway
+
+kubectl --context kind-mlops-test -n monitoring \
+  get svc,servicemonitor mlops-pushgateway
+```
+
+Atteso: pod `1/1 Running`, Service sulla `9091` e `ServiceMonitor` presente.
+
 ## Avviare i port-forward
 
 Nel **terminale dei port-forward** (WSL), lasciare attivi:
@@ -109,23 +130,6 @@ kubectl --context kind-mlops-test -n monitoring \
   port-forward service/mlops-monitoring-grafana 3000:80
 ```
 
-## Esportare i log di inferenza
-
-Nel **terminale dei comandi**, generare traffico via gateway ed esportare i
-record del giorno su SeaweedFS:
-
-```bash
-bash /opt/mlops-local-poc/prometheus/scripts/send-test-traffic.sh
-bash /opt/mlops-local-poc/model-quality/scripts/export-logs.sh
-```
-
-Atteso: cinque righe `richiesta i/5: 200`, poi una riga simile a:
-
-```text
-upload: ../data/inference-YYYY-MM-DD.jsonl to s3://mlops-logs/inference/date=YYYY-MM-DD/inference-YYYY-MM-DD.jsonl
-Export completato: s3://mlops-logs/inference/date=YYYY-MM-DD/inference-YYYY-MM-DD.jsonl
-```
-
 ## Costruire il reference dataset
 
 Creare lo snapshot di reference per la versione risolta dall'alias `champion`
@@ -148,6 +152,23 @@ Reference caricato: s3://mlops-logs/reference/model=v1/
 
 Il lock `reference.lock.json` associa il reference a modello, versione, run e
 dataset usati.
+
+## Esportare i log di inferenza
+
+Nel **terminale dei comandi**, generare traffico via gateway ed esportare i
+record del giorno su SeaweedFS:
+
+```bash
+bash /opt/mlops-local-poc/prometheus/scripts/send-test-traffic.sh
+bash /opt/mlops-local-poc/model-quality/scripts/export-logs.sh
+```
+
+Atteso: cinque righe `richiesta i/5: 200`, poi una riga simile a:
+
+```text
+upload: ../data/inference-YYYY-MM-DD.jsonl to s3://mlops-logs/inference/date=YYYY-MM-DD/inference-YYYY-MM-DD.jsonl
+Export completato: s3://mlops-logs/inference/date=YYYY-MM-DD/inference-YYYY-MM-DD.jsonl
+```
 
 ## Calcolare il drift
 
@@ -222,11 +243,14 @@ Verificare gli oggetti:
 kubectl --context kind-mlops-test -n monitoring get cronjob model-quality-drift
 ```
 
+Atteso: una riga con `SCHEDULE` uguale a `0 2 * * *` e `ACTIVE` uguale a `0`.
+
 Eseguire subito un batch manuale dal `CronJob`, senza attendere la schedule:
 
 ```bash
 kubectl --context kind-mlops-test -n monitoring \
   create job --from=cronjob/model-quality-drift drift-manual-02
+
 kubectl --context kind-mlops-test -n monitoring wait --for=condition=complete \
   job/drift-manual-02 --timeout=300s
 ```
@@ -249,8 +273,9 @@ http://127.0.0.1:3000/d/model-quality-drift/model-quality-drift
 ```
 
 I pannelli attesi sono quattro: PSI per feature, prediction drift, PSI
-massimo e campioni nel batch (le query esatte sono nel file JSON versionato;
-nel browser si leggono da ciascun pannello con `Inspect > Query`).
+massimo e campioni nel batch (le query sono nelle voci `expr` di
+`panels[].targets[]` nel file JSON della dashboard; nel browser si leggono da
+ciascun pannello con `Inspect > Query`).
 
 ## Esercizio facoltativo: traffico perturbato
 

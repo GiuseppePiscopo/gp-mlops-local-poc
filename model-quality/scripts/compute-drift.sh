@@ -40,6 +40,7 @@ fi
 
 S3_OBJECT="s3://${LOG_BUCKET}/${LOG_PREFIX}/date=${DAY}/inference-${DAY}.jsonl"
 
+# Scarica il batch del giorno da S3 in /tmp.
 docker run --rm \
   --network "${SEAWEEDFS_DOCKER_NETWORK}" \
   -e AWS_ACCESS_KEY_ID="${S3_ACCESS_KEY_ID}" \
@@ -56,6 +57,7 @@ if ! docker image inspect "${IMAGE_TAG}" >/dev/null 2>&1; then
   exit 1
 fi
 
+# Nell'immagine dedicata, calcola il drift tra batch e reference.
 docker run --rm \
   -v "${SCRIPT_DIR}:/scripts:ro" \
   -v "${REFERENCE_DIR}:/reference:ro" \
@@ -66,4 +68,5 @@ docker run --rm \
     --reference /reference \
     --output "/data/$(basename "${OUTPUT_FILE}")"
 
+# Mostra il riepilogo del drift calcolato.
 cat "${OUTPUT_FILE}"
