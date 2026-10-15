@@ -9,11 +9,11 @@ to Pushgateway. The batch day defaults to yesterday (UTC).
 """
 
 import argparse
+import importlib.util
 import json
 import os
-import subprocess
 import sys
-import tempfile
+import urllib.error
 import urllib.request
 from datetime import UTC, datetime, timedelta
 
@@ -21,6 +21,18 @@ import boto3
 from kubernetes import client, config
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def load_sibling(name: str, filename: str):
+    """Import a hyphenated sibling script by file path."""
+    spec = importlib.util.spec_from_file_location(name, os.path.join(SCRIPT_DIR, filename))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+compute_drift = load_sibling("compute_drift", "compute-drift.py")
+render_drift_metrics = load_sibling("render_drift_metrics", "render-drift-metrics.py")
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -41,8 +53,11 @@ def read_pod_logs(namespace: str, label: str) -> list[dict]:
             continue
         try:
             text = api.read_namespaced_pod_log(
-                pod.metadata.name, namespace, container="kserve-container",
-                since_seconds=26 * 3600, previous=False,
+                pod.metadata.name,
+                namespace,
+                container="kserve-container",
+                since_seconds=26 * 3600,
+                previous=False,
             )
         except client.ApiException as error:
             print(f"Log non leggibili da {pod.metadata.name}: {error}", file=sys.stderr)
@@ -60,11 +75,10 @@ def read_pod_logs(namespace: str, label: str) -> list[dict]:
     return list(records.values())
 
 
-def run_script(name: str, *args: str) -> None:
-    """Run a sibling script, letting its own output through."""
-    subprocess.run(
-        [sys.executable, os.path.join(SCRIPT_DIR, name), *args], check=True
-    )
+def read_s3_json(s3, bucket: str, key: str) -> dict:
+    """Download a JSON object from S3 and parse it."""
+    body = s3.get_object(Bucket=bucket, Key=key)["Body"].read()
+    return json.loads(body.decode("utf-8"))
 
 
 def main() -> None:
@@ -90,49 +104,26 @@ def main() -> None:
         region_name=os.environ.get("AWS_DEFAULT_REGION", "us-east-1"),
     )
 
-    with tempfile.TemporaryDirectory(prefix="drift-batch-") as tmp_dir:
-        input_path = os.path.join(tmp_dir, "current.jsonl")
-        with open(input_path, "w", encoding="utf-8") as handle:
-            for record in records:
-                handle.write(json.dumps(record) + "\n")
+    reference = read_s3_json(s3, bucket, f"{reference_prefix}/reference-stats.json")
+    lock = read_s3_json(s3, bucket, f"{reference_prefix}/reference.lock.json")
 
-        reference_dir = os.path.join(tmp_dir, "reference")
-        os.mkdir(reference_dir)
-        for name in ("reference-stats.json", "reference.lock.json"):
-            body = s3.get_object(
-                Bucket=bucket, Key=f"{reference_prefix}/{name}"
-            )["Body"].read()
-            with open(os.path.join(reference_dir, name), "wb") as handle:
-                handle.write(body)
-        lock = json.loads(
-            open(os.path.join(reference_dir, "reference.lock.json"), encoding="utf-8").read()
-        )
-        print(f"Reference: {lock['registered_model']} v{lock['resolved_version']}")
+    print(f"Reference: {lock['registered_model']} v{lock['resolved_version']}")
 
-        drift_path = os.path.join(tmp_dir, "drift.json")
-        run_script(
-            "compute-drift.py",
-            "--input", input_path,
-            "--reference", reference_dir,
-            "--output", drift_path,
-        )
+    metrics = compute_drift.compute_drift_metrics(reference, records)
 
-        body = subprocess.run(
-            [
-                sys.executable, os.path.join(SCRIPT_DIR, "render-drift-metrics.py"),
-                "--drift", drift_path,
-                "--reference-lock", os.path.join(reference_dir, "reference.lock.json"),
-                "--instance", day,
-            ],
-            check=True,
-            capture_output=True,
-            text=True,
-        ).stdout.encode("utf-8")
+    print(f"PSI output: {metrics['output_psi']:.6f}")
+    print(f"PSI massimo feature: {metrics['max_feature_psi']:.6f}")
+
+    body = render_drift_metrics.render_exposition(metrics, lock, day).encode("utf-8")
 
     url = f"{pushgateway_url}/metrics/job/model_quality_drift/instance/{day}"
     request = urllib.request.Request(url, data=body, method="PUT")
-    with urllib.request.urlopen(request, timeout=30) as response:
-        print(f"Push: {response.status}")
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            print(f"Push: {response.status}")
+    except urllib.error.HTTPError as error:
+        print(f"Push fallito: {error} -- {error.read().decode()[:500]}", file=sys.stderr)
+        raise
 
     print(f"Batch {day}: {len(records)} record, push completato")
 

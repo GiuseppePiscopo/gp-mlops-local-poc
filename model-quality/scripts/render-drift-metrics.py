@@ -46,7 +46,8 @@ def render_exposition(drift: dict, lock: dict, instance: str) -> str:
         ]
     )
 
-    return "\n".join(lines)
+    # Il formato exposition richiede il newline anche sull'ultima riga.
+    return "\n".join(lines) + "\n"
 
 
 def main() -> None:
