@@ -8,6 +8,43 @@ export delle metriche in Prometheus e dashboard Grafana.
 La qualità effettiva rispetto ai ground truth non è coperta: non esiste un
 flusso di label reali.
 
+Il lab ha due flussi di lavoro che condividono reference (come ingresso), Pushgateway e dashboard (come uscita):
+
+- Flusso manuale:
+
+  ```text
+  log pod ──[export-logs]──▶ S3 inference/date=... ──[compute-drift]──▶ /tmp JSON ──[push-drift-metrics]──▶ Pushgateway
+  ```
+
+  Caratteristiche:
+
+  - artefatti intermedi ispezionabili (da log pod a S3, da S3 a file JSON)
+  - legge il reference da S3
+
+- Flusso schedulato:
+
+  ```text
+  log pod ──[run-drift-batch]──▶ Pushgateway
+  ```
+  
+  Caratteristiche:
+  
+  - tutto in un colpo solo, senza artefatti intermedi
+  - log estratti tramite API
+  - legge il reference da S3
+
+Il reference si costruisce una sola volta in entrambi i flussi:
+
+```text
+MLflow + CSV ──[build-reference]──▶ S3 reference/
+```
+
+L'uscita è la stessa in entrambi i flussi:
+
+```text
+Pushgateway ──[scrape]──▶ Prometheus ──▶ Grafana
+```
+
 ## Prerequisiti
 
 - WSL2 con Docker Desktop integrato e Docker Compose funzionante;
