@@ -146,9 +146,10 @@ le decisioni che cambiano.
   sui run locali le soglie concordate (R2 >= 0.80, RMSE <= 300).
   Contratto ed evidenze sotto. Verifica delle metriche eseguita in sola
   lettura; implementazione e test isolati del bootstrap restano nella fase 4.
-- [ ] Definire come fissare e aggiornare il riferimento di confronto durante
+- [x] Definire come fissare e aggiornare il riferimento di confronto durante
   le prove PR, così un cambiamento concorrente dell'alias `champion` non altera
-  l'esito atteso del test.
+  il riferimento di un run già avviato. Contratto descritto sotto;
+  implementazione e prove restano da eseguire.
 
 #### Contratto training, evaluation e registrazione
 
@@ -228,6 +229,44 @@ serializzazione dei deploy e gestione delle approvazioni di run precedenti,
 per evitare che un vecchio run approvato in ritardo sovrascriva un rilascio
 più recente. Gli output GitHub identificano il passaggio nel workflow, non
 sono una barriera di sicurezza contro codice PR non fidato sul runner.
+
+#### Riferimento di confronto e ripetibilità delle prove PR
+
+- All'inizio del job ordinario, prima del training, risolvere `champion` una
+  sola volta in una versione concreta `READY`. Salvare Registered Model,
+  versione, run sorgente e URI del modello di riferimento. Caricare quel
+  modello per versione, mai nuovamente tramite alias durante l'evaluation.
+  Se la versione fissata non è più recuperabile, fallire senza sostituirla.
+- Fissare anche i dati usati dal job: garantire che training ed evaluation
+  usino lo stesso contenuto CSV, verificarne lo SHA-256 e registrare seed,
+  quota test, preprocessing e identità delle righe del test set. Il solo seed
+  non garantisce identico test set se cambiano dati, ordine o preprocessing.
+  Valutare candidato e riferimento sullo stesso `X_test`/`y_test`.
+- Riportare nel report del gate i riferimenti concreti dei due modelli,
+  l'identità del test set, i due RMSE e l'esito. Una modifica concorrente
+  dell'alias non cambia il confronto già fissato per quel job; non attribuire
+  però al report la garanzia che il modello confrontato sia ancora quello
+  servito al momento del deploy.
+- Un nuovo push alla PR, un nuovo workflow o una riesecuzione del job acquisisce
+  un nuovo snapshot di `champion`. Non riutilizzare implicitamente il report
+  o il riferimento del tentativo precedente. Un confronto cambiato deve
+  essere riconoscibile nei report tramite versione e run attempt GitHub.
+- Per la dimostrazione PR migliorativa/regressiva/corretta, preparare una
+  finestra controllata senza deploy o modifiche manuali agli alias durante
+  la sequenza che si vuole confrontare. Verificare che versione di riferimento,
+  dataset e split nei report coincidano prima di attribuire il cambio di esito
+  alle modifiche del candidato.
+- Se si fa merge e si promuove la prima PR prima della seconda, la seconda
+  deve confrontarsi con il nuovo `champion`: selezionare e verificare i casi
+  degradato/corretto rispetto a quel riferimento, senza ripristinare alias
+  storici solo per ottenere un test verde. La correzione può riprodurre il
+  modello champion, dato che la parità è ammessa.
+
+Nella fase 4 implementare lo snapshot e nella fase 5 verificare anche con test
+isolato che lo spostamento di `champion` dopo lo snapshot non cambi il modello
+usato dal gate. Non spostare l'alias reale per una prova unitaria.
+La prevenzione di deploy obsoleti durante l'approval rimane un requisito
+distinto, già previsto nel contratto tra job.
 
 #### Bootstrap manuale senza champion
 
@@ -347,6 +386,8 @@ Validazione dell'implementazione ancora da eseguire:
 - [ ] Implementare i risultati JSON, il report del gate e gli output tra i job
   secondo il contratto di identificazione della fase 1; validare la
   corrispondenza tra modello valutato, versione registrata e versione servita.
+- [ ] Implementare lo snapshot iniziale di `champion` e l'identificazione
+  del test set secondo il contratto di ripetibilità della fase 1.
 - [ ] Estendere resolver, CLI, lock e documentazione per la selezione esplicita
   della versione, preservando il rendering manuale per alias. Definire
   serializzazione dei deploy e trattamento dei run approvati fuori ordine.
@@ -418,3 +459,17 @@ Alla ripresa del lavoro:
    prove, esiti e decisioni;
 4. non eseguire operazioni sul cluster o sul Registry senza verificare prima
    contesto Kubernetes, alias/versioni MLflow e stato attuale del servizio.
+
+### Accesso ai servizi KinD e port-forward
+
+I servizi KinD richiedono port-forward secondo le rispettive procedure.
+Non assumere che gli endpoint Kubernetes siano raggiungibili nelle sessioni successive.
+MLflow è stato raggiunto nella verifica precedente tramite la porta esposta
+dal suo stack Docker: questo non dimostra l'accessibilità dei servizi KinD.
+
+Prima di una verifica, individuare i port-forward necessari e controllare se
+sono già attivi. Possono essere più di uno e i comandi restano in foreground:
+usare terminali dedicati o processi in background gestiti, verificarne la
+raggiungibilità e arrestare al termine soltanto quelli avviati per la prova.
+Non avviare duplicati o arrestare processi dell'utente; concordare esplicitamente
+se un port-forward deve restare disponibile oltre la verifica.
