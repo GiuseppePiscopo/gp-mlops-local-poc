@@ -1,0 +1,111 @@
+# Piano di implementazione CI/CD locale
+
+Documento temporaneo per avanzamento e ripresa delle sessioni. I contratti e
+le evidenze sono in [design.md](design.md); la procedura operativa sarà creata
+durante l'implementazione in `github-actions-self-hosted-wsl.md`.
+
+## Indice della progettazione
+
+- [Architettura e perimetro](design.md#architettura-e-perimetro)
+- [Stato iniziale](design.md#stato-iniziale)
+- [Training, evaluation e registrazione](design.md#training-evaluation-e-registrazione)
+- [Identificazione e passaggio tra job](design.md#identificazione-e-passaggio-tra-job)
+- [Confronto e prove PR](design.md#confronto-e-prove-pr)
+- [Bootstrap ed evidenze locali](design.md#bootstrap-ed-evidenze-locali)
+- [Tag e identità immagini](design.md#tag-e-identita-immagini)
+- [Riferimento Azure ML](design.md#riferimento-azure-ml)
+- [Accesso operativo e port-forward](design.md#accesso-operativo-e-port-forward)
+
+## 1. Definire i contratti di training ed evaluation
+
+- [x] Ispezionare e documentare metriche e comportamento correnti.
+- [x] Concordare gate relativo: RMSE candidato <= champion, parità ammessa.
+- [x] Definire logging separato dalla registrazione post-gate, esclusa nelle PR.
+- [x] Definire identificazione di run/modello e versione esatta tra i job.
+- [x] Definire bootstrap manuale e casi di test; verificare soglie sui run locali.
+- [x] Definire snapshot del riferimento e ripetibilità delle prove PR.
+
+## 2. Preparare e provare i tag immutabili
+
+- [x] Definire tag per commit, image ID locale e RepoDigest opzionale.
+- [ ] Valutare separatamente training, resolver e MLServer: soltanto il runtime
+  serving deve essere caricato in KinD.
+- [ ] Implementare nei build script e consumer verifica sorgenti, tag non
+  sovrascrivibili, riuso verificato e registrazione delle identità; aggiornare
+  le procedure di training e resolver.
+- [ ] Rendere configurabile l'immagine del ServingRuntime mantenendo l'uso manuale.
+- [ ] Aggiornare la procedura serving: build, kind load e verifica del tag SHA.
+- [ ] Provare una volta nell'ambiente WSL/Docker/KinD esistente e verificare
+  l'immagine effettivamente avviata dal predictor.
+- [ ] Preservare il cluster e il servizio; niente ricreazioni o modifiche
+  distruttive. Eventuale ripristino esplicito del riferimento precedente.
+
+## 3. Preparare runner e sicurezza
+
+- [ ] Configurare il remote GitHub aggiuntivo; rendere esplicita la destinazione
+  dei push per non usare accidentalmente Bitbucket.
+- [ ] Configurare runner WSL, etichetta e accesso al solo repository previsto.
+- [ ] Verificare Docker, kind, kubectl, MLflow, SeaweedFS e dataset runtime.
+- [ ] Definire configurazioni persistenti, variabili e segreti senza esporli.
+- [ ] Usare il checkout Linux e il relativo commit per build e provenance.
+- [ ] Definire PR fidate e permessi minimi; niente esecuzione del codice PR con
+  pull_request_target. Non considerare i filtri una barriera di isolamento.
+
+## 4. Implementare workflow e job
+
+- [ ] Aggiungere trigger PR, push su main e avvio manuale; PR senza deploy.
+- [ ] Implementare training dal checkout con immagine per commit e dati runtime.
+- [ ] Separare logging da registrazione nel codice/launcher; aggiornare CLI
+  e procedura manuale, mantenendo utilizzabile il percorso non orchestrato.
+- [ ] Implementare snapshot champion, identità del test set e gate relativo.
+- [ ] Implementare bootstrap esplicito con soglie assolute e controlli dedicati.
+- [ ] Produrre risultati JSON, report e output tra job secondo il design;
+  pubblicare metriche ed esiti nel riepilogo del workflow.
+- [ ] Registrare solo post-gate su main/manuale e assegnare candidate READY.
+- [ ] Estendere resolver, CLI, lock e documentazione per versione esplicita,
+  preservando il rendering manuale per alias.
+- [ ] Definire serializzazione dei deploy e rifiuto dei rilasci obsoleti
+  approvati fuori ordine, includendo il caso bootstrap.
+- [ ] Configurare environment production con approval e job deploy dipendente.
+- [ ] Renderizzare la versione esatta, caricare runtime in KinD e applicare
+  risorse/InferenceService.
+- [ ] Attendere readiness, provare inferenza e aggiornare champion solo al successo.
+- [ ] Conservare report, manifest, lock, riferimenti modello e immagini come
+  output/artifact della stessa esecuzione, senza credenziali.
+
+## 5. Verificare i percorsi
+
+- [ ] PR migliorativa: gate superato, nessuna registrazione o deploy.
+- [ ] Seconda PR regressiva: gate fallito; correzione sulla stessa PR e nuovo
+  push: gate superato. Controllare riferimenti e dati dei report.
+- [ ] Main e manuale: registrazione post-gate, attesa approval e deploy riuscito.
+- [ ] Rifiuto/mancata approval: nessun deploy o aggiornamento champion.
+- [ ] Errori di gate/render/immagine/readiness/inferenza: fallimento esplicito
+  e champion invariato, senza dichiarare rollback automatico.
+- [ ] Test isolati di soglie bootstrap, errori Registry, champion presente o
+  comparso durante approval; non cancellare l'alias reale.
+- [ ] Test isolato: cambio alias dopo snapshot non cambia il confronto fissato.
+- [ ] Verificare identità tra modello valutato, registrato e servito e immagini.
+- [ ] Verificare e documentare rollback manuale, senza automatizzarlo.
+
+## 6. Documentare e chiudere
+
+- [ ] Scrivere `github-actions-self-hosted-wsl.md`: prerequisiti, runner,
+  protezioni GitHub, configurazione, trigger, comandi, immagini, verifiche,
+  troubleshooting, sicurezza e rollback manuale.
+- [ ] Aggiornare [roadmap.md](../roadmap.md) solo dopo verifica della CI/CD.
+- [ ] Allineare procedura e roadmap ai risultati effettivi; trasferire le
+  decisioni ancora utili dal design nella documentazione stabile.
+- [ ] Rimuovere questo piano quando procedura e roadmap sono complete;
+  mantenere il design solo per decisioni non già spiegate nella procedura.
+
+## Ripresa della sessione
+
+Leggere prima questo piano e poi solo le sezioni del design necessarie.
+Controllare Git e stato effettivo prima di spuntare attività. Per verifiche
+sull'ambiente controllare contesto Kubernetes, alias/versioni e disponibilità
+dei port-forward, senza avviare duplicati o arrestare processi dell'utente.
+Aggiornare le checkbox per indicare l'avanzamento, nel design soltanto contratti
+ed evidenze. Non duplicare i dettagli nella checklist. Procedere un punto alla
+volta e fermarsi dopo ogni step con modifiche al repository per valutazione e
+possibile commit dell'utente.
