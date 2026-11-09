@@ -327,11 +327,16 @@ Validazione dell'implementazione ancora da eseguire:
 
 ### 2. Preparare e provare i tag immutabili per le immagini
 
-- [ ] Definire un formato di tag comune basato sul commit, preferibilmente lo
-  SHA completo; registrare il digest Docker prodotto.
+- [x] Definire il formato di tag comune e il contratto di identificazione
+  delle build locali (vedi sotto). La registrazione effettiva di image ID e
+  digest e la protezione dalla sovrascrittura restano da implementare.
 - [ ] Valutare i tre componenti immagine separatamente: training, deployment
   resolver e serving MLServer. Evitare di richiedere a KinD immagini che usa
   solo il runner.
+- [ ] Implementare nei build script e nei relativi consumer il contratto dei
+  tag per commit: verifica sorgenti, divieto di sovrascrittura, riuso verificato
+  e registrazione distinta di image ID e RepoDigest opzionale. Aggiornare le
+  procedure di training e resolver oltre a quella di serving.
 - [ ] Rendere configurabile il riferimento dell'immagine nel manifest
   `ServingRuntime` senza compromettere l'uso manuale documentato.
 - [ ] Aggiornare la procedura di serving con build, `kind load`, verifica nel
@@ -342,6 +347,46 @@ Validazione dell'implementazione ancora da eseguire:
   verificare che il predictor avvii proprio quell'immagine.
 - [ ] Evitare modifiche distruttive o ricreazioni del cluster; tornare al
   riferimento precedente solo con una modifica esplicita e verificata.
+
+#### Tag per commit e identità delle immagini locali
+
+- Formato comune: `<nome-immagine>:git-<SHA completo del commit costruito>`.
+  Mantenere i nomi `gp-mof-capstone-training`,
+  `gp-mof-capstone-deployment-resolver` e `gp-mof-capstone-mlserver`.
+  Usare il commit effettivamente presente nel checkout di build, che nelle PR
+  può essere il merge commit verificato da Actions; non presumere che sia
+  sempre lo SHA del branch sorgente della PR.
+- Consentire questi tag di rilascio solo per sorgenti corrispondenti a quel
+  commit: checkout pulito e build context coerente. Nel percorso manuale
+  sincronizzato, non dedurre lo SHA da `/opt/mlops-local-poc`, che non contiene
+  `.git`; verificare la corrispondenza dei sorgenti al repository autorevole.
+  Le modifiche non committate non devono essere presentate come una build
+  immutabile di un commit pulito.
+- Non sovrascrivere un tag già esistente con una nuova build. Una riesecuzione
+  può riusare l'immagine esistente solo dopo averne verificato la provenance.
+  Se la stessa revisione deve essere ricostruita con basi o dipendenze diverse,
+  usare un riferimento distinto ed esplicito, non riassegnare il tag originario.
+  Il tag per commit non garantisce da solo build riproducibili: gli script di
+  training e serving usano attualmente `--pull`.
+- Dopo la build acquisire sempre `docker image inspect` campo `.Id`
+  (`sha256:...`) come **image ID locale**, oltre a riferimento completo e
+  commit. `RepoDigests` contiene invece riferimenti a manifest di registry e
+  può essere vuoto per immagini costruite solo localmente. Non chiamare image
+  ID e RepoDigest lo stesso valore e non rendere necessario un push per
+  ottenere la provenance locale.
+- Il launcher di training attuale legge solo `RepoDigests` e restituisce
+  `unknown` quando è vuoto: adattarlo a registrare esplicitamente image ID e,
+  se disponibili, RepoDigest, senza inventare un digest di registry.
+  Un errore di inspect o image ID mancante deve essere segnalato come errore.
+- La build di MLServer, il caricamento `kind load` e il riferimento nel
+  `ServingRuntime` devono usare il medesimo tag. Verificare anche la sua
+  identità nel nodo e il riferimento/identità effettivi del predictor,
+  distinguendo gli identificatori Docker da quelli esposti da containerd:
+  non presumerne l'uguaglianza testuale.
+- Registrare i riferimenti e gli identificatori ottenuti negli output di
+  build/provenance e, per il training, nel run MLflow. Non cambiare in questo
+  step build script, default CLI o manifest: l'adozione effettiva e la prova
+  one-shot saranno svolte nei punti successivi.
 
 ### 3. Preparare l'ambiente runner e il perimetro di sicurezza
 
