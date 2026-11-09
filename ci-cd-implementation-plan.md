@@ -40,11 +40,21 @@ diagnostica.
 - **Trigger:** PR aperta/aggiornata, push su `main` e avvio manuale.
 - **PR:** eseguono training ed evaluation, ma non creano model version nel
   Registry e non fanno deploy.
+- **Gate ordinario:** confronto relativo con `champion`, senza soglie assolute:
+  il candidato passa se il suo RMSE è minore o uguale a quello di `champion`.
+  Entrambi sono valutati sul medesimo test set del run corrente. R2, MAE e
+  MAPE restano informative; `baseline` resta il riferimento storico, non un
+  fallback automatico.
+- **Bootstrap:** se `champion` non esiste, il flusso ordinario fallisce.
+  Consentire il primo rilascio solo con avvio manuale e opzione esplicita di
+  bootstrap, soglie assolute da concordare e approvazione del deploy. Errori di
+  accesso al Registry o di caricamento del modello non sono casi di bootstrap.
 - **Push su `main` e run manuali:** eseguono training ed evaluation; se
   superate, registrano il modello e impostano l'alias `candidate`.
 - **Approvazione:** il job di deployment usa un GitHub Actions environment
   `production` protetto da approvazione manuale.
-- **Promozione:** il deploy risolve `candidate` in una versione concreta e
+- **Promozione:** il deploy usa la versione concreta restituita dalla
+  registrazione del proprio run, senza risolvere nuovamente `candidate`, e
   conserva manifest e lock di provenance. Solo dopo deploy e smoke test
   riusciti aggiorna `champion` alla versione servita. Si mantengono gli alias
   locali `baseline`, `candidate` e `champion`; non si introducono i tag Azure
@@ -71,6 +81,27 @@ diagnostica.
   evitando di trattare la copia Windows come sorgente dei sorgenti eseguiti.
 - [x] Working tree pulito al momento della creazione di questo piano.
 
+## Esempio di riferimento: lab Azure ML
+
+Il laboratorio precedente è disponibile localmente in
+`C:\Dati\WS\BC\PoC\mlops-fundamentals-poc`. Consultare:
+
+- [Istruzioni fase 3](../mlops-fundamentals-poc/docs/phase3-lab-instructions.md):
+  setup GitHub, approval, prove PR con regressione e correzione, rollback manuale.
+- [Workflow](../mlops-fundamentals-poc/.github/workflows/ml-pipeline.yml):
+  due job, output della versione esatta tra i job, registrazione esclusa nelle
+  PR, smoke test prima della promozione, cancellazione dei run PR superati.
+- [Evaluation](../mlops-fundamentals-poc/tools/evaluate.py):
+  controllo run `FINISHED`, soglie assolute R2 >= 0.80 e RMSE <= 300,
+  esito non-zero al fallimento e tabella nel riepilogo GitHub Actions.
+
+Non copiare le soglie come requisiti del gate ordinario locale: qui è stato
+scelto il confronto relativo con `champion`. Le soglie del bootstrap restano
+da definire. Le metriche Azure sono denominate `R2`/`RMSE`, quelle locali
+`r2`/`rmse`. Il workflow Azure attuale già esclude la registrazione nelle PR,
+coerentemente con il comportamento richiesto per questo lab. Autenticazione
+Azure/OIDC, endpoint gestiti e tag Azure non appartengono alla soluzione locale.
+
 ## Piano di attività
 
 Le caselle non spuntate indicano lavoro ancora da fare. Aggiornare questo
@@ -79,23 +110,120 @@ le decisioni che cambiano.
 
 ### 1. Definire i contratti di training ed evaluation
 
-- [ ] Ispezionare e documentare le metriche e la logica di valutazione esistenti
+- [x] Ispezionare e documentare le metriche e la logica di valutazione esistenti
   (`training/src/common/training_utils.py` e `training/src/random_forest/train.py`).
-- [ ] Definire il confronto con `champion`/`baseline`: metrica primaria,
+- **Comportamento attuale verificato:** split train/test 80/20 con seed 42;
+  il modello è valutato sul test set con MAE, RMSE, R2 e MAPE. MAPE esclude
+  le righe con target zero. Le quattro metriche sono stampate e registrate nel
+  run MLflow; non esiste una soglia di accettazione né un confronto col
+  `champion`/`baseline`. Dopo la valutazione, `mlflow.sklearn.log_model` riceve
+  sempre `registered_model_name`, quindi la registrazione nel Model Registry
+  avviene incondizionatamente nel codice di training. Di conseguenza, l'attuale
+  comportamento non soddisfa ancora il requisito CI/CD di valutare prima e
+  registrare solo dopo il passaggio, solo per `main`/run manuali.
+- [x] Definire il confronto con `champion`/`baseline`: metrica primaria,
   direzione di miglioramento, tolleranze e comportamento se l'alias non esiste.
-  Non introdurre soglie arbitrarie: concordarle sulla base delle metriche del
-  lab.
-- [ ] Separare chiaramente la produzione di metriche/artifact dalla
+  Regola concordata: `rmse_candidate <= rmse_champion`, senza tolleranza di
+  regressione aggiuntiva e con parità ammessa. Valutare i due modelli sullo
+  stesso test set del run corrente, non confrontare direttamente metriche
+  storiche di run potenzialmente diversi. Metriche mancanti/non finite,
+  incompatibilità di feature o modello non caricabile devono produrre errore
+  esplicito, non un passaggio del gate. `champion` assente blocca il flusso
+  ordinario; il bootstrap richiede un percorso manuale esplicito.
+- [x] Definire la separazione tra produzione di metriche/artifact e
   registrazione nel Model Registry: PR non registra versioni; `main` e
   workflow manuale registrano solo dopo il superamento dell'evaluation.
-- [ ] Stabilire come il job successivo identifica senza ambiguità il run e la
+  Contratto descritto sotto; la modifica al codice resta da implementare
+  nella fase 4.
+- [x] Stabilire come il job successivo identifica senza ambiguità il run e la
   versione registrata, senza affidarsi a una risoluzione tardiva di alias
-  mutabili.
+  mutabili. Contratto descritto sotto; implementazione e prove restano nella
+  fase 4.
 - [ ] Verificare che la gestione del primo rilascio, senza `champion` esistente,
-  sia definita e testabile.
+  sia definita e testabile. Concordare e validare sui dati locali le soglie
+  assolute del bootstrap manuale; non sono ancora state selezionate.
 - [ ] Definire come fissare e aggiornare il riferimento di confronto durante
   le prove PR, così un cambiamento concorrente dell'alias `champion` non altera
   l'esito atteso del test.
+
+#### Contratto training, evaluation e registrazione
+
+Tre operazioni distinte nello stesso job `train-and-evaluate`, non tre job
+GitHub aggiuntivi:
+
+1. **Training e logging:** addestrare il modello e salvare nel run MLflow
+   parametri, provenance, metriche, firma e artifact del modello. Nel percorso
+   CI/CD, `mlflow.sklearn.log_model` non deve ricevere
+   `registered_model_name`: il modello viene salvato per essere valutato, ma
+   non viene creata una Model Version nel Registry. Un artifact/logged model
+   MLflow non equivale a una versione del Registered Model.
+2. **Evaluation:** valutare il modello appena prodotto e il `champion` sul
+   medesimo test set, secondo la regola concordata. Conservare il risultato
+   della valutazione per la consultazione; regressioni ed errori devono
+   interrompere il job con esito non-zero. Un training `FINISHED` non implica
+   che il gate sia superato. I run, le metriche e gli artifact dei modelli
+   rifiutati restano disponibili per diagnosi, senza versioni nel Registry.
+3. **Registrazione esplicita:** solo dopo gate superato e solo per push su
+   `main` o avvio manuale, registrare esattamente il modello valutato, senza
+   riaddestrarlo, e assegnare alla versione pronta l'alias `candidate`.
+   Questo completa il primo job; approval e deploy appartengono al secondo.
+
+| Evento / esito gate | Run e artifact MLflow | Nuova Model Version | Alias `candidate` | Deploy |
+|---|---|---|---|---|
+| PR, superato | Sì | No | Invariato | No |
+| PR, fallito | Sì, se prodotti | No | Invariato | No |
+| `main` o manuale, fallito | Sì, se prodotti | No | Invariato | No |
+| `main` o manuale, superato | Sì | Sì | Nuova versione pronta | Solo dopo approval |
+
+Queste sono le condizioni del flusso previsto, non una garanzia di atomicità:
+se la registrazione riesce ma l'assegnazione di `candidate` fallisce, la
+versione potrebbe già esistere. Segnalare esplicitamente l'errore e la versione
+creata, bloccare il deploy e non nascondere la registrazione parziale.
+Training, gate e registrazione non modificano mai `champion` o `baseline`.
+
+In fase di implementazione aggiornare anche launcher, opzioni CLI e procedura manuale:
+la separazione è qui definita, ma il codice attuale registra ancora durante
+il training e non è stato modificato in questo step.
+
+#### Identificazione del modello e passaggio tra i job
+
+- **Training -> evaluation:** produrre un risultato JSON strutturato con
+  `run_id`, `model_uri` del modello effettivamente restituito dal logging e
+  `git_commit` del checkout. Non ricavare il modello cercando l'ultimo run e
+  non dedurre l'URI da una struttura di directory presunta: MLflow salva già
+  modelli con un proprio model ID. Il launcher deve rendere disponibile il
+  risultato al workflow senza estrarlo dal testo dei log.
+- **Evaluation -> registrazione:** il report del gate deve riferirsi agli
+  stessi `run_id`, `model_uri` e commit, e identificare il `champion` concreto
+  usato nel confronto. Registrare quell'URI solo se il report corrisponde agli
+  input del run corrente e attesta il superamento del gate. Report mancante,
+  incoerente o di un altro run blocca la registrazione.
+- **Registrazione -> deploy:** aggiungere al risultato `registered_model` e
+  `model_version`, ottenuti dalla risposta della registrazione e validati in
+  stato `READY`. Esporre questi riferimenti come output del primo job tramite
+  `GITHUB_OUTPUT` e consultarli nel secondo tramite `needs`. Conservare il
+  risultato JSON e il report come artifact della stessa esecuzione GitHub,
+  identificata anche da run ID e run attempt GitHub. Le PR non producono
+  output di versione registrata e non avviano il job deploy.
+- **Dopo approval:** il deploy legge il Registered Model e la versione esatti
+  restituiti dal proprio job precedente, verifica stato e corrispondenza della
+  provenance, quindi renderizza il manifest per quella versione. Se nel
+  frattempo `candidate` cambia, non sostituire la versione approvata con la
+  nuova destinazione dell'alias. Un riferimento rimosso o incoerente produce
+  un errore, senza fallback a `latest`, `candidate` o `champion`.
+- **Rendering e promozione:** estendere il resolver con una selezione esplicita
+  per versione, alternativa all'alias. Mantenere il percorso manuale per
+  alias e adattare il lock per distinguere selezione per alias e per versione.
+  Il lock deve continuare a riportare versione, run sorgente e URI S3 concreti.
+  Smoke test e aggiornamento di `champion` devono riferirsi alla medesima
+  versione distribuita.
+
+Questo contratto evita la sostituzione del candidato durante l'approval, ma
+non risolve da solo l'ordine tra rilasci concorrenti: nella fase 4 definire
+serializzazione dei deploy e gestione delle approvazioni di run precedenti,
+per evitare che un vecchio run approvato in ritardo sovrascriva un rilascio
+più recente. Gli output GitHub identificano il passaggio nel workflow, non
+sono una barriera di sicurezza contro codice PR non fidato sul runner.
 
 ### 2. Preparare e provare i tag immutabili per le immagini
 
@@ -145,14 +273,25 @@ le decisioni che cambiano.
   deployment.
 - [ ] Implementare il job training/evaluation usando checkout del codice,
   build immagine con tag commit, dataset runtime e accesso a MLflow.
+- [ ] Implementare nel training e nel launcher la separazione definita nella
+  fase 1: logging del modello senza registrazione implicita nel percorso
+  CI/CD, gate distinto e registrazione esplicita post-gate. Aggiornare le
+  opzioni CLI e la procedura manuale di training per mantenere utilizzabile
+  anche il percorso non orchestrato.
 - [ ] Salvare gli output necessari (metriche, run ID, eventuale report) e
   renderli consultabili nell'esecuzione GitHub Actions.
 - [ ] Dopo evaluation superata, registrare il modello soltanto per push su
   `main` o avvio manuale e assegnare `candidate`; in caso di fallimento
   interrompere il flusso prima del deployment.
+- [ ] Implementare i risultati JSON, il report del gate e gli output tra i job
+  secondo il contratto di identificazione della fase 1; validare la
+  corrispondenza tra modello valutato, versione registrata e versione servita.
+- [ ] Estendere resolver, CLI, lock e documentazione per la selezione esplicita
+  della versione, preservando il rendering manuale per alias. Definire
+  serializzazione dei deploy e trattamento dei run approvati fuori ordine.
 - [ ] Implementare il job deploy dipendente dal job precedente e protetto
   dall'environment `production`.
-- [ ] Nel job deploy, risolvere la versione candidata in modo deterministico,
+- [ ] Nel job deploy, usare la versione esplicita restituita dal primo job,
   generare manifest e lock, caricare in KinD il runtime MLServer con il tag
   atteso, applicare le risorse necessarie e il manifest `InferenceService`.
 - [ ] Attendere la readiness e fare smoke test d'inferenza. Aggiornare
