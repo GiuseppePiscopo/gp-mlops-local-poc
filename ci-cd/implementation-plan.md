@@ -12,7 +12,7 @@ durante l'implementazione in `github-actions-self-hosted-wsl.md`.
 - [Identificazione e passaggio tra job](design.md#identificazione-e-passaggio-tra-job)
 - [Confronto e prove PR](design.md#confronto-e-prove-pr)
 - [Bootstrap ed evidenze locali](design.md#bootstrap-ed-evidenze-locali)
-- [Tag e identità immagini](design.md#tag-e-identita-immagini)
+- [Tag e identità immagini](design.md#tag-e-identità-immagini)
 - [Riferimento Azure ML](design.md#riferimento-azure-ml)
 - [Accesso operativo e port-forward](design.md#accesso-operativo-e-port-forward)
 
@@ -28,7 +28,7 @@ durante l'implementazione in `github-actions-self-hosted-wsl.md`.
 ## 2. Preparare e provare i tag immutabili
 
 - [x] Definire tag per commit, image ID locale e RepoDigest opzionale.
-- [ ] Valutare separatamente training, resolver e MLServer: soltanto il runtime
+- [x] Valutare separatamente training, resolver e MLServer: soltanto il runtime
   serving deve essere caricato in KinD.
 - [ ] Implementare nei build script e consumer verifica sorgenti, tag non
   sovrascrivibili, riuso verificato e registrazione delle identità; aggiornare

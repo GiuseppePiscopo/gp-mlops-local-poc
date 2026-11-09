@@ -185,7 +185,41 @@ V1, candidate V2. Entrambi i run FINISHED:
   champion presente, errore Registry, champion comparso durante approval.
   Non cancellare champion reale per simulare il primo rilascio.
 
-## Tag e identita immagini
+## Tag e identità immagini
+
+### Ruolo dei tre componenti
+
+Ricognizione dei Dockerfile e dei consumer esistenti, senza build o prove
+sull'ambiente:
+
+| Immagine | Contenuto e consumer | Dove viene eseguita | Caricamento KinD |
+|---|---|---|---|
+| gp-mof-capstone-training | Sorgenti e dipendenze di training; launcher run_training.py | Docker locale, rete mlops-local-network, CSV montato read-only | No |
+| gp-mof-capstone-deployment-resolver | Codice, template e configurazione del resolver; render.sh | Docker locale, rete mlops-local-network, output persistito tramite bind mount | No |
+| gp-mof-capstone-mlserver | MLServer, dipendenze e LoggingMLflowRuntime; ServingRuntime | Pod predictor KServe nel cluster | Sì, con kind load |
+
+- Il [Dockerfile training](../training/Dockerfile) copia i sorgenti, non il
+  dataset. Il launcher passa rete Docker, mount dati e provenance: aggiornare
+  insieme build e selezione dell'immagine nel launcher.
+- Il [Dockerfile resolver](../deployment/Dockerfile) incorpora anche template
+  e configurazione. Il [consumer render.sh](../deployment/scripts/render.sh)
+  condivide DEPLOYMENT_RESOLVER_IMAGE con il build script: usare lo stesso
+  riferimento esplicito in entrambi, non lasciare il consumer su :dev.
+- Il [Dockerfile serving](../serving/Dockerfile) non incorpora il modello
+  addestrato: MLServer parte da /mnt/models, popolato dal percorso di storage
+  KServe. Il modello resta negli artifact SeaweedFS ed è selezionato tramite
+  storageUri nel manifest InferenceService.
+- Una nuova Model Version non richiede di per sé una nuova immagine MLServer:
+  immagine runtime e artifact modello hanno cicli di vita distinti, ma
+  dipendenze/runtime devono restare compatibili con il modello selezionato.
+  Nessun caricamento delle immagini training/resolver nei nodi è necessario
+  per il flusso concordato.
+- Per ciascun componente usare il commit dei suoi sorgenti di build e
+  propagare il riferimento effettivo al relativo consumer. Un'immagine
+  MLServer già verificata può essere riusata per più modelli; non presumere
+  che il suo commit debba coincidere con quello di ogni nuovo training.
+
+### Contratto comune dei tag
 
 - Formato: nome-immagine:git-SHA_COMPLETO del commit effettivamente costruito.
   Nomi: gp-mof-capstone-training, gp-mof-capstone-deployment-resolver,
