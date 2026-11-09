@@ -47,7 +47,9 @@ diagnostica.
   fallback automatico.
 - **Bootstrap:** se `champion` non esiste, il flusso ordinario fallisce.
   Consentire il primo rilascio solo con avvio manuale e opzione esplicita di
-  bootstrap, soglie assolute da concordare e approvazione del deploy. Errori di
+  bootstrap, soglie assolute e approvazione del deploy. Soglie:
+  R2 >= 0.80 e RMSE <= 300, verificate sulle metriche dei run locali V1/V2.
+  I test dell'implementazione del gate restano da eseguire. Errori di
   accesso al Registry o di caricamento del modello non sono casi di bootstrap.
 - **Push su `main` e run manuali:** eseguono training ed evaluation; se
   superate, registrano il modello e impostano l'alias `candidate`.
@@ -96,8 +98,9 @@ Il laboratorio precedente è disponibile localmente in
   esito non-zero al fallimento e tabella nel riepilogo GitHub Actions.
 
 Non copiare le soglie come requisiti del gate ordinario locale: qui è stato
-scelto il confronto relativo con `champion`. Le soglie del bootstrap restano
-da definire. Le metriche Azure sono denominate `R2`/`RMSE`, quelle locali
+scelto il confronto relativo con `champion`. Per il solo bootstrap si propone
+di riusare le soglie Azure, verificate sui run locali esistenti (vedi bootstrap).
+Le metriche Azure sono denominate `R2`/`RMSE`, quelle locali
 `r2`/`rmse`. Il workflow Azure attuale già esclude la registrazione nelle PR,
 coerentemente con il comportamento richiesto per questo lab. Autenticazione
 Azure/OIDC, endpoint gestiti e tag Azure non appartengono alla soluzione locale.
@@ -139,9 +142,10 @@ le decisioni che cambiano.
   versione registrata, senza affidarsi a una risoluzione tardiva di alias
   mutabili. Contratto descritto sotto; implementazione e prove restano nella
   fase 4.
-- [ ] Verificare che la gestione del primo rilascio, senza `champion` esistente,
-  sia definita e testabile. Concordare e validare sui dati locali le soglie
-  assolute del bootstrap manuale; non sono ancora state selezionate.
+- [x] Definire il primo rilascio senza `champion`, i casi di test e verificare
+  sui run locali le soglie concordate (R2 >= 0.80, RMSE <= 300).
+  Contratto ed evidenze sotto. Verifica delle metriche eseguita in sola
+  lettura; implementazione e test isolati del bootstrap restano nella fase 4.
 - [ ] Definire come fissare e aggiornare il riferimento di confronto durante
   le prove PR, così un cambiamento concorrente dell'alias `champion` non altera
   l'esito atteso del test.
@@ -224,6 +228,63 @@ serializzazione dei deploy e gestione delle approvazioni di run precedenti,
 per evitare che un vecchio run approvato in ritardo sovrascriva un rilascio
 più recente. Gli output GitHub identificano il passaggio nel workflow, non
 sono una barriera di sicurezza contro codice PR non fidato sul runner.
+
+#### Bootstrap manuale senza champion
+
+- Esporre un input booleano `bootstrap`, disabilitato di default, solo per
+  `workflow_dispatch`. Non consentire bootstrap da PR o push, né un fallback
+  automatico quando il confronto ordinario non è possibile.
+- Verificare l'assenza del riferimento `champion`: distinguere l'assenza
+  effettiva del Registered Model o dell'alias da errori di rete,
+  autenticazione e inconsistenze. Se `champion` esiste, rifiutare la richiesta
+  di bootstrap anziché aggirare il gate relativo.
+- Valutare il modello sul test set del run corrente. Soglie concordate:
+  entrambe le condizioni `r2 >= 0.80` e `rmse <= 300` devono essere vere;
+  metriche mancanti/non finite o training non completato correttamente
+  bloccano il gate. Non applicare queste soglie al flusso ordinario.
+- Conservare nel report modalità bootstrap, soglie, metriche, identità del
+  test set, run e modello valutato. Registrare e assegnare `candidate` solo a
+  gate superato; mantenere lo stesso contratto di versione esplicita tra job.
+- Richiedere comunque approval nell'environment `production`. Prima di
+  modificare il servizio, nel percorso di deploy serializzato, verificare di
+  nuovo che `champion` non sia comparso durante l'attesa; in tal caso fermare
+  il bootstrap e richiedere un nuovo run ordinario. La sola verifica di
+  assenza non è un lock: la serializzazione prevista nella fase 4 deve
+  coprire i deploy ordinari e bootstrap.
+- Aggiornare `champion` soltanto dopo deploy e smoke test riusciti.
+  Non creare o spostare implicitamente `baseline`, che resta un riferimento
+  storico gestito esplicitamente.
+
+Validazione locale eseguita il 2026-11-09:
+
+- MLflow 3.14.0, interrogazioni REST in sola lettura di Registered Model,
+  versioni e run sorgenti; nessun training o modifica ad alias/servizio.
+  Stato letto: `baseline` e `champion` su V1, `candidate` su V2.
+
+| Versione | Run MLflow | Stato | R2 | RMSE | Soglie bootstrap |
+|---|---|---|---|---|---|
+| V1 | `192b2b53c91d400b91a76ccfea241817` | FINISHED | 0.8496584036867021 | 250.27836597480078 | Superate |
+| V2 | `826d90e03ac14af9b31deabb4797bd97` | FINISHED | 0.8590028119972198 | 242.37563390082678 | Superate |
+
+- Entrambi i run riportano dataset SHA-256
+  `d2f7a0f0ba95e82678ead794429a18a7f696aa3b82c9b9ec34ec47806ff0767b`,
+  8760 righe, 7008 training/1752 test, seed 42 e test size 0.2.
+  V1 usa 100 alberi/max depth 10; V2 300 alberi/max depth 20.
+- Entrambi riportano commit
+  `414aca10d3475f3a32a5b2220da603b064d4c8f4` e `git.dirty=true`:
+  queste evidenze validano le soglie sui run esistenti, ma non costituiscono
+  una riproduzione dal checkout pulito corrente.
+- Le soglie sono compatibili con le due configurazioni locali già riuscite.
+  Non è stato eseguito un bootstrap reale né provato un caso degradato:
+  i test del gate implementato restano necessari.
+
+Validazione dell'implementazione ancora da eseguire:
+
+- Durante l'implementazione verificare con test isolati: valori esattamente
+  sulle soglie (pass), uno dei due limiti violato (fail), metrica mancante/non
+  finita, `champion` presente, errore del Registry e comparsa di `champion`
+  durante l'approval. Non cancellare il `champion` reale per simulare il
+  primo rilascio.
 
 ### 2. Preparare e provare i tag immutabili per le immagini
 
