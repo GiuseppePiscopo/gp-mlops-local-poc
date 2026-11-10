@@ -46,9 +46,9 @@ durante l'implementazione in `github-actions-self-hosted-wsl.md`.
   l'immagine del ServingRuntime mantenendo l'uso manuale. Adottare insieme
   build e consumer per non interrompere la procedura serving corrente.
 - [x] Aggiornare la procedura serving: build, kind load e verifica del tag SHA.
-- [ ] Provare una volta nell'ambiente WSL/Docker/KinD esistente e verificare
+- [x] Provare una volta nell'ambiente WSL/Docker/KinD esistente e verificare
   l'immagine effettivamente avviata dal predictor.
-- [ ] Preservare il cluster e il servizio; niente ricreazioni o modifiche
+- [x] Preservare il cluster e il servizio; niente ricreazioni o modifiche
   distruttive. Eventuale ripristino esplicito del riferimento precedente.
 
 ## 3. Preparare runner e sicurezza
