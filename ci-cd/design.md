@@ -36,6 +36,25 @@ operativa in costruzione è [github-actions-self-hosted-wsl.md](github-actions-s
   codice PR fidato, limitare GITHUB_TOKEN e non usare pull_request_target per
   eseguire il codice della PR.
 
+## PR fidate e permessi
+
+- Ammettere al job PR solo eventi `pull_request` con repository sorgente
+  uguale a quello di destinazione e autore della PR `GiuseppePiscopo`.
+  Escludere PR da fork e bot. Applicare il filtro al job prima
+  dell'assegnazione al runner, non come step dopo il checkout.
+- Non usare `pull_request_target` per eseguire codice PR e non aggiungere
+  percorsi indiretti che eseguano codice di PR escluse.
+- L'autore della PR non certifica ogni commit: eseguire solo branch con
+  codice, workflow e dipendenze fidati. Questi filtri non isolano la macchina
+  e non proteggono da modifiche malevole dei workflow.
+- Mantenere il repository privato. Prima di un eventuale passaggio a pubblico,
+  riesaminare accesso al runner, trigger PR e protezioni disponibili; il
+  filtro sull'autore non rende sicura da solo la pubblicazione.
+- Dichiarare `permissions: contents: read` nei workflow e
+  `persist-credentials: false` nel checkout. Non concedere scrittura sul
+  repository o approvazione di PR ai job; aggiungere altri permessi soltanto
+  in presenza di una necessità verificata.
+
 ## Configurazione e accessi del runner
 
 - Il workflow deve impostare esplicitamente i valori non segreti, senza

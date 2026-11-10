@@ -8,6 +8,7 @@ le evidenze sono in [design.md](design.md); la procedura operativa in costruzion
 
 - [Architettura e perimetro](design.md#architettura-e-perimetro)
 - [Configurazione e accessi del runner](design.md#configurazione-e-accessi-del-runner)
+- [PR fidate e permessi](design.md#pr-fidate-e-permessi)
 - [Stato iniziale](design.md#stato-iniziale)
 - [Training, evaluation e registrazione](design.md#training-evaluation-e-registrazione)
 - [Identificazione e passaggio tra job](design.md#identificazione-e-passaggio-tra-job)
@@ -62,13 +63,14 @@ le evidenze sono in [design.md](design.md); la procedura operativa in costruzion
 - [x] Usare il checkout Linux e il relativo commit per build e provenance.
   Verificare checkout, build e riuso con il
   [workflow Verify runner](github-actions-self-hosted-wsl.md#verificare-checkout-e-build-sul-runner).
-- [ ] Definire PR fidate e permessi minimi; niente esecuzione del codice PR con
+- [x] Definire PR fidate e permessi minimi; niente esecuzione del codice PR con
   pull_request_target. Non considerare i filtri una barriera di isolamento.
 
 ## 4. Implementare workflow e job
 
 - [ ] Creare `ml-pipeline.yml` con trigger PR, push su main e avvio manuale;
   PR senza deploy. Mantenere separato il workflow diagnostico `verify-runner.yml`.
+  Applicare il perimetro [PR fidate e permessi](design.md#pr-fidate-e-permessi).
 - [ ] Implementare training dal checkout con immagine per commit e dati runtime,
   usando [configurazione e accessi del runner](design.md#configurazione-e-accessi-del-runner).
 - [ ] Separare logging da registrazione nel codice/launcher; aggiornare CLI

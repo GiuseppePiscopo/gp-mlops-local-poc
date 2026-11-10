@@ -32,6 +32,17 @@ nell'interfaccia GitHub.
 - Prima di cambiare la visibilità del repository, verificare le protezioni
   per le PR e la disponibilità dell'approval dell'environment `production`.
 
+## Verificare i permessi GitHub Actions
+
+Nel repository GitHub, aprire **Settings > Actions > General > Workflow
+permissions** e verificare:
+
+- **Read repository contents and packages permissions** selezionato;
+- **Allow GitHub Actions to create and approve pull requests** disabilitato.
+
+Salvare se sono state apportate modifiche. Atteso: permessi predefiniti in
+sola lettura e approvazione delle PR da workflow non consentita.
+
 ## Configurare il remote GitHub
 
 Nel repository locale, verificare i remote:
