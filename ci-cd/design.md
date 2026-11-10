@@ -117,6 +117,11 @@ Ricognizione dei sorgenti e delle procedure, non verifica del cluster attuale:
 
 Tre operazioni nello stesso job train-and-evaluate, non tre job aggiuntivi:
 
+Preparazione, training ed evaluation sono step separati del workflow.
+La preparazione acquisisce i riferimenti e i dati prima del training;
+lo script di training non risolve champion e non applica il gate.
+L'evaluation dedicata usa la stessa immagine training con entrypoint distinto.
+
 1. Training/logging: salvare parametri, provenance, metriche, firma e modello
    nel run MLflow. Nel percorso CI/CD log_model non riceve
    registered_model_name: artifact/logged model non è una Model Version.
@@ -181,6 +186,18 @@ il percorso non orchestrato deve restare utilizzabile.
   quota test, preprocessing e identità delle righe test. Solo il seed non
   garantisce lo stesso test set se cambiano ordine, dati o preprocessing.
   Usare lo stesso X_test/y_test per entrambi i modelli.
+- Copiare il CSV runtime in una directory dedicata all'esecuzione, fuori dal
+  checkout, prima del training. Fissare SHA-256 della copia nello snapshot
+  iniziale e montarla in sola lettura; i passi successivi non rileggono il
+  CSV runtime originale. DVC non è richiesto per questa implementazione.
+- Il training salva il test set effettivo: feature, target, indici delle
+  righe, ordine e tipi. Il manifest prodotto associa checksum dei file,
+  identità del test set, run e hash del CSV allo snapshot iniziale verificato.
+- L'evaluation riceve JSON del candidato, snapshot champion e test set;
+  verifica coerenza e checksum prima di misurare entrambi i modelli.
+  Non ripete split o preprocessing e non accetta nuovi hash come sostituti
+  dei valori attesi. File mancanti, alterazioni o riferimenti incoerenti
+  causano errore esplicito.
 - Report con identità di modelli/test set, entrambi i RMSE ed esito. Lo
   snapshot non garantisce che champion sia ancora servito al momento del deploy.
 - Nuovo push/workflow o riesecuzione job acquisisce un nuovo snapshot;
