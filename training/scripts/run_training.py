@@ -13,6 +13,7 @@ starting Docker.
 """
 
 import argparse
+import json
 import os
 import shlex
 import subprocess
@@ -20,7 +21,6 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-DEFAULT_IMAGE_TAG = "gp-mof-capstone-training:dev"
 DEFAULT_EXPERIMENT_NAME = "gp-mof-capstone-training"
 DEFAULT_REGISTERED_MODEL_NAME = "gp-mof-capstone-model"
 CONTAINER_DATASET_PATH = "/data/input/SeoulBikeData.csv"
@@ -33,6 +33,7 @@ class PreRunValidationError(Exception):
 @dataclass(frozen=True)
 class RunContext:
     image_tag: str
+    image_id: str
     image_digest: str
     mlflow_tracking_uri: str
     experiment_name: str
@@ -88,7 +89,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--image-tag",
-        default=os.getenv("IMAGE_TAG", DEFAULT_IMAGE_TAG),
+        default=os.getenv("IMAGE_TAG"),
     )
     parser.add_argument(
         "--experiment-name",
@@ -186,28 +187,43 @@ def get_git_metadata(git_repository_path: Path) -> dict[str, str]:
     }
 
 
-def get_image_digest(image_tag: str) -> str:
+def get_image_identity(git_repository: Path, image_tag: str | None) -> dict:
+    arguments = [
+        sys.executable,
+        str(git_repository / "ci-cd" / "scripts" / "prepare_image.py"),
+        "resolve",
+        "--repository",
+        str(git_repository),
+        "--component",
+        "training",
+    ]
+    if image_tag:
+        arguments.extend(["--image", image_tag])
     result = subprocess.run(
-        [
-            "docker",
-            "image",
-            "inspect",
-            '--format={{join .RepoDigests "\\n"}}',
-            image_tag,
-        ],
+        arguments,
         text=True,
         capture_output=True,
     )
 
     if result.returncode != 0:
-        error_message = result.stderr.strip() or "Image was not found."
+        error_message = result.stderr.strip() or "Image resolution failed."
         raise PreRunValidationError(
-            f"Docker image not found: {image_tag}. Build it before starting the training run. Details: {error_message}"
+            f"Unable to validate training image. Build it from the committed sources first. Details: {error_message}"
         )
 
-    repo_digests = result.stdout.strip().splitlines()
-
-    return repo_digests[0] if repo_digests else "unknown"
+    try:
+        identity = json.loads(result.stdout)
+    except ValueError as error:
+        raise PreRunValidationError("Invalid image provenance JSON.") from error
+    if (
+        not isinstance(identity, dict)
+        or not isinstance(identity.get("image"), str)
+        or not isinstance(identity.get("image_id"), str)
+        or not isinstance(identity.get("repo_digests"), list)
+        or not all(isinstance(value, str) for value in identity["repo_digests"])
+    ):
+        raise PreRunValidationError("Incomplete image provenance.")
+    return identity
 
 
 def resolve_run_context(args: argparse.Namespace) -> RunContext:
@@ -245,16 +261,22 @@ def resolve_run_context(args: argparse.Namespace) -> RunContext:
         raise PreRunValidationError(f"Unable to resolve Git metadata from: {git_repository_path}") from error
 
     try:
-        image_digest = get_image_digest(args.image_tag)
+        identity = get_image_identity(git_repository_path, args.image_tag)
     except OSError as error:
         raise PreRunValidationError(
             "Unable to execute Docker. Verify that Docker Desktop is running "
             "and that the Docker CLI is available in WSL."
         ) from error
 
+    if identity.get("git_commit") != git_metadata["commit"] or git_metadata["dirty"] != "false":
+        raise PreRunValidationError(
+            "Image revision and clean Git checkout must match the recorded training provenance."
+        )
+
     return RunContext(
-        image_tag=args.image_tag,
-        image_digest=image_digest,
+        image_tag=identity["image"],
+        image_id=identity["image_id"],
+        image_digest=identity["repo_digests"][0] if identity["repo_digests"] else "",
         mlflow_tracking_uri=mlflow_tracking_uri,
         experiment_name=args.experiment_name,
         docker_network=docker_network,
@@ -277,8 +299,10 @@ def build_docker_command(run_context: RunContext) -> list[str]:
         "GIT_REMOTE": run_context.git_remote,
         "GIT_DIRTY": run_context.git_dirty,
         "CONTAINER_IMAGE": run_context.image_tag,
-        "CONTAINER_IMAGE_DIGEST": run_context.image_digest,
+        "CONTAINER_IMAGE_ID": run_context.image_id,
     }
+    if run_context.image_digest:
+        environment_variables["CONTAINER_IMAGE_DIGEST"] = run_context.image_digest
 
     command = [
         "docker",
@@ -295,7 +319,7 @@ def build_docker_command(run_context: RunContext) -> list[str]:
 
     command.extend(
         [
-            run_context.image_tag,
+            run_context.image_id,
             "--training_data",
             CONTAINER_DATASET_PATH,
             "--n_estimators",
@@ -316,7 +340,8 @@ def print_run_summary(
 ) -> None:
     print("Training configuration")
     print(f"  Image:                  {run_context.image_tag}")
-    print(f"  Image digest:           {run_context.image_digest}")
+    print(f"  Local image ID:         {run_context.image_id}")
+    print(f"  Registry RepoDigest:    {run_context.image_digest or '(not available for this local image)'}")
     print(f"  MLflow tracking URI:    {run_context.mlflow_tracking_uri}")
     print(f"  Docker network:         {run_context.docker_network}")
     print(f"  Experiment:             {run_context.experiment_name}")

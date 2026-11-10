@@ -18,6 +18,8 @@ Devono inoltre essere già disponibili:
 - alias MLflow `champion` e/o `candidate`;
 - rete Docker `mlops-local-network`, creata dallo stack MLflow;
 - directory `/opt/mlops-local-poc/` posseduta dall’utente WSL corrente.
+- Git e `python3` >= 3.11 in WSL; repository sorgente pulito, completo di
+  `ci-cd/scripts/prepare_image.py`.
 
 Il repository Windows è la sorgente autorevole dei file versionati. Il workspace operativo WSL è:
 
@@ -102,6 +104,15 @@ Controllare in particolare la presenza di:
 
 ## Costruire l’immagine Docker
 
+Impostare il percorso del repository Git Windows e il tag. Il repository
+deve essere pulito, senza modifiche staged, unstaged o file non tracciati.
+Esportare le variabili anche nei terminali da cui si eseguiranno i render.
+
+```bash
+export GIT_REPOSITORY="/mnt/c/<percorso-repository>/mlops-local-poc"
+export DEPLOYMENT_RESOLVER_IMAGE="gp-mof-capstone-deployment-resolver:git-$(git -C "$GIT_REPOSITORY" rev-parse HEAD)"
+```
+
 Costruire l’immagine del deployment resolver dal build context WSL.
 
 ```bash
@@ -113,14 +124,18 @@ cd /opt/mlops-local-poc/deployment
 L’immagine prodotta è:
 
 ```text
-gp-mof-capstone-deployment-resolver:dev
+gp-mof-capstone-deployment-resolver:git-<SHA completo>
 ```
+
+Controllare nell'output JSON `image`, `image_id` e `git_commit`.
+Per ricostruire lo stesso commit, usare un nuovo suffisso `-rebuild1` in
+`DEPLOYMENT_RESOLVER_IMAGE`, sia in build sia nei render.
 
 Verificare l’immagine:
 
 ```bash
 docker image inspect \
-  gp-mof-capstone-deployment-resolver:dev \
+  "$DEPLOYMENT_RESOLVER_IMAGE" \
   --format 'image_id={{.Id}} created={{.Created}}'
 ```
 
@@ -131,6 +146,8 @@ image_id=sha256:...
 ```
 
 ## Renderizzare il deployment champion
+
+Non cambiare commit tra build e render.
 
 Il comando seguente risolve l’alias configurato nel file:
 
@@ -354,7 +371,8 @@ Gli output persistenti sono sempre disponibili in:
 
 Al termine della procedura risultano verificati:
 
-- immagine Docker `gp-mof-capstone-deployment-resolver:dev` costruita dal build context WSL;
+- immagine Docker `gp-mof-capstone-deployment-resolver:git-<SHA>` costruita da
+  snapshot committato, con image ID locale e label di provenance verificabili;
 - alias MLflow risolto in una Model Version in stato `READY`;
 - URI degli artifact tradotto nell'URI S3 SeaweedFS configurato;
 - manifest KServe `InferenceService` e lock JSON di provenance generati;

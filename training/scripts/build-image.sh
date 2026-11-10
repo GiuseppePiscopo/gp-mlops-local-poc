@@ -5,9 +5,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 TRAINING_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 
-IMAGE_TAG="${IMAGE_TAG:-gp-mof-capstone-training:dev}"
+REPOSITORY="${GIT_REPOSITORY:-$(git -C "${TRAINING_DIR}" rev-parse --show-toplevel)}"
+IMAGE_TAG="${IMAGE_TAG:-}"
 
-docker build \
-  --pull \
-  --tag "${IMAGE_TAG}" \
-  "${TRAINING_DIR}"
+exec python3 "${REPOSITORY}/ci-cd/scripts/prepare_image.py" build \
+  --repository "${REPOSITORY}" --component training --image "${IMAGE_TAG}"

@@ -2,7 +2,7 @@
 
 Questa procedura sincronizza in WSL2 il componente di training del capstone, costruisce l'immagine Docker, esegue due training containerizzati di un `RandomForestRegressor` sul dataset Seoul Bike Sharing e ne registra le versioni nel Model Registry MLflow, inclusi assegnazione degli alias e verifica del recupero del modello.
 
-Il repository Git Windows resta la sorgente versionata di codice, Dockerfile, script e dataset di esempio. La directory `/opt/mlops-local-poc/training` in WSL contiene soltanto la copia operativa dei sorgenti statici e il dataset runtime, mai copiato nell'immagine Docker né committato nel repository.
+Il repository Git Windows contiene codice, Dockerfile, script e dataset di esempio. La directory `/opt/mlops-local-poc/training` in WSL contiene la copia operativa degli script e il dataset runtime, mai copiato nell'immagine Docker né committato nel repository.
 
 Questa procedura presuppone uno stack MLflow già installato e funzionante, raggiungibile nella rete Docker `mlops-local-network` (vedi `mlflow/mlflow-docker-wsl-setup.md`). Non copre l'integrazione con KServe, trattata in una procedura dedicata.
 
@@ -15,6 +15,8 @@ Questa procedura presuppone uno stack MLflow già installato e funzionante, ragg
 - Git LFS installato, con `git lfs pull` già eseguito nel repository (il CSV del dataset è tracciato con Git LFS)
 - accesso `sudo` nell'utente Ubuntu WSL
 - `rsync`, `sed`, `find`, `curl` disponibili in WSL
+- `python3` (>= 3.11) e Git disponibili in WSL; repository sorgente pulito e
+  completo di `ci-cd/scripts/prepare_image.py`.
 
 ## Verificare la raggiungibilità di MLflow
 
@@ -109,6 +111,15 @@ Controllare che il file esista e che lo SHA-256 resti stabile tra esecuzioni suc
 
 ## Costruire e verificare l'immagine Docker
 
+Impostare il percorso del repository Git Windows e il tag. Il repository
+deve essere pulito, senza modifiche staged, unstaged o file non tracciati.
+Mantenere le variabili esportate per i comandi successivi.
+
+```bash
+export GIT_REPOSITORY="/mnt/c/<percorso-repository>/mlops-local-poc"
+export IMAGE_TAG="gp-mof-capstone-training:git-$(git -C "$GIT_REPOSITORY" rev-parse HEAD)"
+```
+
 Costruire l'immagine di training dal build context WSL.
 
 ```bash
@@ -117,11 +128,13 @@ cd /opt/mlops-local-poc/training
 ./scripts/build-image.sh
 ```
 
+Controllare nell'output JSON `image`, `image_id` e `git_commit`.
+
 Verificare l'immagine:
 
 ```bash
 docker image inspect \
-  gp-mof-capstone-training:dev \
+  "$IMAGE_TAG" \
   --format 'image_id={{.Id}} created={{.Created}}'
 ```
 
@@ -135,7 +148,7 @@ Verificare l'entrypoint senza avviare alcun run MLflow:
 
 ```bash
 docker run --rm \
-  gp-mof-capstone-training:dev \
+  "$IMAGE_TAG" \
   --help
 ```
 
@@ -148,6 +161,9 @@ Controllare che compaiano almeno questi argomenti, senza `ModuleNotFoundError` o
 --registered_model_name
 --fail_for_alert_test
 ```
+
+Non cambiare commit tra build e training. Per ricostruire lo stesso commit,
+usare un nuovo suffisso `-rebuild1` in `IMAGE_TAG`, sia in build sia in avvio.
 
 ## Eseguire il primo training (Version 1)
 
@@ -287,7 +303,7 @@ docker run --rm \
   -e MLFLOW_TRACKING_URI=http://mlflow:5000 \
   -v /opt/mlops-local-poc/training/data:/data:ro \
   --entrypoint python \
-  gp-mof-capstone-training:dev \
+  "$IMAGE_TAG" \
   -m random_forest.verify_registered_model \
   --training_data /data/input/SeoulBikeData.csv \
   --model_uri models:/gp-mof-capstone-model@candidate \
@@ -308,7 +324,8 @@ Predictions:
 
 Al termine della procedura risultano verificati:
 
-- immagine Docker `gp-mof-capstone-training:dev` costruita dal build context WSL;
+- immagine Docker `gp-mof-capstone-training:git-<SHA>` costruita dallo snapshot
+  committato, con image ID locale e label di provenance verificabili;
 - entrypoint del container funzionante (import dei package, CLI);
 - due training containerizzati completati, con parametri, metriche e provenance Git registrati su MLflow;
 - due model version (`1` e `2`) in stato `READY` nel Model Registry `gp-mof-capstone-model`;

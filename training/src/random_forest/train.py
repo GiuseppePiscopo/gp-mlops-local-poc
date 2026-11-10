@@ -98,7 +98,7 @@ def get_provenance_tags() -> dict[str, str]:
         "git.remote": "GIT_REMOTE",
         "git.dirty": "GIT_DIRTY",
         "container.image": "CONTAINER_IMAGE",
-        "container.image_digest": "CONTAINER_IMAGE_DIGEST",
+        "container.image_id": "CONTAINER_IMAGE_ID",
     }
 
     tags = {
@@ -110,6 +110,9 @@ def get_provenance_tags() -> dict[str, str]:
 
     for mlflow_tag_name, environment_name in environment_tag_names.items():
         tags[mlflow_tag_name] = os.getenv(environment_name, "unknown")
+
+    if image_digest := os.getenv("CONTAINER_IMAGE_DIGEST"):
+        tags["container.image_digest"] = image_digest
 
     return tags
 

@@ -30,10 +30,21 @@ durante l'implementazione in `github-actions-self-hosted-wsl.md`.
 - [x] Definire tag per commit, image ID locale e RepoDigest opzionale.
 - [x] Valutare separatamente training, resolver e MLServer: soltanto il runtime
   serving deve essere caricato in KinD.
-- [ ] Implementare nei build script e consumer verifica sorgenti, tag non
+- [x] Implementare nei build script e consumer di training/resolver verifica sorgenti, tag non
   sovrascrivibili, riuso verificato e registrazione delle identità; aggiornare
   le procedure di training e resolver.
-- [ ] Rendere configurabile l'immagine del ServingRuntime mantenendo l'uso manuale.
+- [ ] Verificare la regressione di training e deployment resolution in WSL,
+  prima di modificare MLServer: sincronizzare gli script aggiornati, costruire
+  dal commit pulito le due immagini e ripetere la build per verificarne il
+  riuso senza cambio di image ID. Eseguire un training reale e controllare
+  metriche, artifact, nuova Model Version READY e provenance immagine su
+  MLflow, senza spostare gli alias esistenti. Renderizzare champion con il
+  resolver aggiornato e verificare manifest/lock rispetto alla versione
+  attesa, senza applicarli al cluster. La prova crea un run e una versione:
+  registrare gli identificativi e l'esito, senza dichiararla priva di effetti.
+- [ ] Integrare il build MLServer con lo script comune e rendere configurabile
+  l'immagine del ServingRuntime mantenendo l'uso manuale. Adottare insieme
+  build e consumer per non interrompere la procedura serving corrente.
 - [ ] Aggiornare la procedura serving: build, kind load e verifica del tag SHA.
 - [ ] Provare una volta nell'ambiente WSL/Docker/KinD esistente e verificare
   l'immagine effettivamente avviata dal predictor.

@@ -48,7 +48,7 @@ Ricognizione dei sorgenti e delle procedure, non verifica del cluster attuale:
 - [train.py](../training/src/random_forest/train.py) non applica soglie o
   confronto champion. Passa sempre registered_model_name a log_model:
   attualmente registra incondizionatamente una Model Version.
-- [Build training](../training/scripts/build-image.sh) e
+- Alla ricognizione iniziale, [build training](../training/scripts/build-image.sh) e
   [build serving](../serving/scripts/build-image.sh) accettano IMAGE_TAG,
   con default :dev e --pull. Il [build resolver](../deployment/scripts/build-image.sh)
   accetta DEPLOYMENT_RESOLVER_IMAGE, con default :dev.
@@ -61,7 +61,9 @@ Ricognizione dei sorgenti e delle procedure, non verifica del cluster attuale:
 - La [procedura serving](../serving/serving-kserve-model.md) costruisce e
   carica l'immagine nel cluster mlops-test. Le procedure attuali sincronizzano
   dal repo Windows a /opt/mlops-local-poc, senza .git nella copia operativa.
-- Il nuovo percorso CI/CD e i tag per commit non sono ancora implementati.
+- Il workflow CI/CD non è ancora implementato. Training e resolver ora usano
+  lo script comune per i tag per commit; l'integrazione MLServer resta
+  da fare insieme alla configurazione del ServingRuntime.
 
 ## Training, evaluation e registrazione
 
@@ -226,8 +228,9 @@ sull'ambiente:
   gp-mof-capstone-mlserver. Per PR il checkout può essere un merge commit,
   non necessariamente lo SHA del branch sorgente.
 - Tag di rilascio solo per checkout pulito e build context coerente. Nella
-  copia /opt senza .git verificare corrispondenza col repository autorevole;
-  non attribuire modifiche non committate a un commit pulito.
+  copia /opt senza .git indicare il repository sorgente con GIT_REPOSITORY.
+  Costruire dai sorgenti committati, sul filesystem Linux, non dalla copia
+  sincronizzata potenzialmente obsoleta. Il dataset runtime resta esterno.
 - Non sovrascrivere tag esistenti. Riuso solo con provenance verificata;
   rebuild dello stesso commit con basi/dipendenze diverse richiede riferimento
   distinto esplicito. Tag SHA non garantisce riproducibilità (build --pull).
@@ -240,7 +243,8 @@ sull'ambiente:
   identità nel nodo e immagine effettiva predictor, senza presumere uguali
   testualmente gli identificatori di Docker e containerd.
 - Registrare identità negli output di build/provenance e, per training, MLflow.
-  Contratto ancora da implementare nei build script, consumer e procedure.
+  Implementato per training/resolver; build e consumer serving ancora da
+  integrare insieme, preservando la procedura corrente fino ad allora.
 
 ## Riferimento Azure ML
 

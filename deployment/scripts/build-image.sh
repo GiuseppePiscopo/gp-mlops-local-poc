@@ -2,13 +2,11 @@
 
 set -euo pipefail
 
-DEFAULT_IMAGE="gp-mof-capstone-deployment-resolver:dev"
-
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 DEPLOYMENT_DIRECTORY="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 
-IMAGE="${DEPLOYMENT_RESOLVER_IMAGE:-${DEFAULT_IMAGE}}"
+REPOSITORY="${GIT_REPOSITORY:-$(git -C "${DEPLOYMENT_DIRECTORY}" rev-parse --show-toplevel)}"
+IMAGE_TAG="${DEPLOYMENT_RESOLVER_IMAGE:-}"
 
-exec docker build \
-  --tag "${IMAGE}" \
-  "${DEPLOYMENT_DIRECTORY}"
+exec python3 "${REPOSITORY}/ci-cd/scripts/prepare_image.py" build \
+  --repository "${REPOSITORY}" --component deployment --image "${IMAGE_TAG}"
