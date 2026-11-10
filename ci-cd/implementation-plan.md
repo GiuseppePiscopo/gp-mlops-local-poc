@@ -33,7 +33,7 @@ durante l'implementazione in `github-actions-self-hosted-wsl.md`.
 - [x] Implementare nei build script e consumer di training/resolver verifica sorgenti, tag non
   sovrascrivibili, riuso verificato e registrazione delle identità; aggiornare
   le procedure di training e resolver.
-- [ ] Verificare la regressione di training e deployment resolution in WSL,
+- [x] Verificare la regressione di training e deployment resolution in WSL,
   prima di modificare MLServer: sincronizzare gli script aggiornati, costruire
   dal commit pulito le due immagini e ripetere la build per verificarne il
   riuso senza cambio di image ID. Eseguire un training reale e controllare

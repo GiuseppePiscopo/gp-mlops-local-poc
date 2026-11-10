@@ -60,13 +60,6 @@ venv/
 .env.*.local
 .env.local
 
-# TensorFlow Serving model versions hosted locally (generated at deploy time);
-# keep the config files that live directly in the folder tracked
-phase_0/final_project/serving/*/
-
-# Azure ML downloaded Explanation data
-phase_1/**/download_explanation/
-
 # Local output data
 outputs/
 
@@ -81,3 +74,6 @@ mlflow.db
 *.gif
 *.bmp
 *.svg
+
+# Temporary folder
+temp/

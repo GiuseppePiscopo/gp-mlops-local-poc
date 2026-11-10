@@ -128,8 +128,6 @@ gp-mof-capstone-deployment-resolver:git-<SHA completo>
 ```
 
 Controllare nell'output JSON `image`, `image_id` e `git_commit`.
-Per ricostruire lo stesso commit, usare un nuovo suffisso `-rebuild1` in
-`DEPLOYMENT_RESOLVER_IMAGE`, sia in build sia nei render.
 
 Verificare l’immagine:
 
@@ -145,15 +143,12 @@ L’output atteso è simile a:
 image_id=sha256:...
 ```
 
+Per ricostruire lo stesso commit, usare un nuovo suffisso `-rebuild1` in
+`DEPLOYMENT_RESOLVER_IMAGE`, sia in build sia nei render.
+
 ## Renderizzare il deployment champion
 
 Non cambiare commit tra build e render.
-
-Il comando seguente risolve l’alias configurato nel file:
-
-```text
-config/deployment-target.local.yaml
-```
 
 Nella configurazione corrente l’alias è `champion`. Eseguire il renderer per risolverlo in una versione concreta e generare il manifest KServe con il relativo lock JSON di provenance.
 
