@@ -1,0 +1,42 @@
+name: Verify runner
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-checkout:
+    runs-on: [self-hosted, Linux, X64, mlops-local]
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    env:
+      GIT_REPOSITORY: ${{ github.workspace }}
+      BUILD_RESULT: ${{ runner.temp }}/checkout-build-${{ github.run_id }}-${{ github.run_attempt }}.json
+    steps:
+      - name: Checkout with LFS
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          lfs: true
+          persist-credentials: false
+
+      - name: Verify Linux checkout and commit
+        run: |
+          bash "$GIT_REPOSITORY/ci-cd/scripts/verify-checkout.sh" \
+            "$GIT_REPOSITORY" "$GITHUB_SHA"
+
+      - name: Build training image from checkout
+        run: |
+          set -euo pipefail
+          unset IMAGE_TAG
+          bash "$GIT_REPOSITORY/training/scripts/build-image.sh" > "$BUILD_RESULT"
+
+      - name: Verify image provenance
+        run: |
+          python3 "$GIT_REPOSITORY/ci-cd/scripts/verify-image-provenance.py" \
+            --build-result "$BUILD_RESULT" \
+            --expected-commit "$GITHUB_SHA" \
+            --summary "$GITHUB_STEP_SUMMARY"

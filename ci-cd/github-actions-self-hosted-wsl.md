@@ -137,3 +137,32 @@ del training; versione Docker stampata, nodo `Ready` e servizio `READY=True`.
 
 Per aggiornare il Secret S3 e verificarne l'endpoint, seguire
 [Applicare il Secret S3](../serving/serving-kserve-model.md#applicare-il-secret-s3).
+
+## Verificare checkout e build sul runner
+
+Inviare al branch `main` di GitHub i commit da verificare:
+
+```bash
+git push github main
+```
+
+Con il runner attivo, aprire **Actions > Verify runner > Run workflow**
+([verify-runner.yml](../.github/workflows/verify-runner.yml)),
+selezionare `main` e avviare l'esecuzione.
+
+Verificare il job `verify-checkout` e il riepilogo dell'esecuzione.
+
+Atteso:
+
+- tutti gli step completati con successo;
+- checkout sotto `~/actions-runner/_work/`, su filesystem Linux;
+- commit del checkout uguale allo SHA dell'esecuzione;
+- file LFS verificati e repository pulito;
+- immagine `gp-mof-capstone-training:git-<SHA_COMPLETO>` con lo stesso commit;
+- riferimento immagine e image ID riportati nel riepilogo.
+
+Ripetere **Run workflow** sullo stesso commit. Atteso: `Reused: True`
+nel riepilogo e image ID invariato.
+
+Questa verifica costruisce soltanto l'immagine: non esegue training,
+registrazione di modelli o deploy.
