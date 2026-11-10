@@ -244,6 +244,26 @@ curl --fail --silent --show-error \
 
 Controllare che la risposta contenga `"version": "2"` e `"status": "READY"`, quindi confrontare le metriche `mae`, `rmse`, `r2` e `mape` stampate dai due run per decidere quale versione promuovere.
 
+## Eseguire training senza registrazione
+
+Per salvare run, metriche e artifact senza creare una Model Version, aggiungere
+`--skip-registration` al comando di training:
+
+```bash
+./scripts/run_training.py \
+  --training-data /opt/mlops-local-poc/training/data/input/SeoulBikeData.csv \
+  --mlflow-tracking-uri http://mlflow:5000 \
+  --docker-network mlops-local-network \
+  --git-repository "$GIT_REPOSITORY" \
+  --skip-registration \
+  --n-estimators 100 \
+  --max-depth 10
+```
+
+Atteso: run `FINISHED`, metriche e modello presenti negli artifact MLflow,
+nessuna nuova versione nel Registry e alias invariati.
+Senza l'opzione, il training mantiene la registrazione della Model Version.
+
 ## Assegnare gli alias alle model version
 
 Registrare nel Model Registry quale versione è riferimento storico (`baseline`), quale è attualmente approvata (`champion`) e quale è candidata alla promozione (`candidate`). Gli esempi seguenti assumono che Version 1 resti `baseline`/`champion` e Version 2 sia `candidate`; adattare i valori `version` all'esito del confronto delle metriche.

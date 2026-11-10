@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   train-and-evaluate:
-    name: Prepare training
+    name: Train and evaluate
     if: >-
       github.event_name == 'push' ||
       github.event_name == 'workflow_dispatch' ||
@@ -28,6 +28,11 @@ jobs:
     env:
       GIT_REPOSITORY: ${{ github.workspace }}
       BUILD_RESULT: pipeline-build-${{ github.run_id }}-${{ github.run_attempt }}.json
+      TRAINING_DATA_HOST_PATH: /opt/mlops-local-poc/training/data/input/SeoulBikeData.csv
+      DOCKER_NETWORK: mlops-local-network
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MLFLOW_EXPERIMENT_NAME: gp-mof-capstone-training
+      REGISTERED_MODEL_NAME: gp-mof-capstone-model
     steps:
       - name: Checkout with LFS
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -53,10 +58,19 @@ jobs:
             --expected-commit "$GITHUB_SHA" \
             --summary "$GITHUB_STEP_SUMMARY"
 
+      - name: Train without model registration
+        run: |
+          set -euo pipefail
+          unset IMAGE_TAG
+          python3 "$GIT_REPOSITORY/training/scripts/run_training.py" \
+            --skip-registration \
+            --n-estimators 100 \
+            --max-depth 10
+
       - name: Report pipeline scope
         run: |
           printf '%s\n' \
             '## Pipeline scope' \
             '' \
-            'Checkout and image build only. Training, evaluation, model registration and deployment are not implemented yet.' \
+            'Training and metric logging completed without Model Registry registration. Relative evaluation gate and deployment are not implemented yet.' \
             >> "$GITHUB_STEP_SUMMARY"

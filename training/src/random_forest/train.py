@@ -1,6 +1,6 @@
 """Trains a RandomForestRegressor on the Seoul Bike Sharing dataset and logs the run
 to the MLflow Tracking Server: hyperparameters, dataset/provenance tags, evaluation
-metrics, the model signature and a new version of the model in the Model Registry.
+metrics and the model signature. Model Registry version creation can be skipped.
 
 The container only needs `MLFLOW_TRACKING_URI`, not SeaweedFS endpoint or
 credentials: the Tracking Server's artifact root uses the `mlflow-artifacts:`
@@ -49,6 +49,11 @@ def parse_args() -> argparse.Namespace:
         "--registered_model_name",
         type=str,
         default=DEFAULT_REGISTERED_MODEL_NAME,
+    )
+    parser.add_argument(
+        "--skip_registration",
+        action="store_true",
+        help="Log the model without creating a Model Registry version.",
     )
     parser.add_argument(
         "--fail_for_alert_test",
@@ -211,7 +216,7 @@ def main(args: argparse.Namespace) -> None:
             skops_trusted_types=[
                 "sklearn.tree._tree.Tree",
             ],
-            registered_model_name=args.registered_model_name,
+            registered_model_name=None if args.skip_registration else args.registered_model_name,
         )
 
 

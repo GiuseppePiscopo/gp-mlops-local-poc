@@ -46,6 +46,7 @@ class RunContext:
     git_commit: str
     git_remote: str
     git_dirty: str
+    skip_registration: bool
 
 
 def get_environment_int(name: str, default: int) -> int:
@@ -101,6 +102,11 @@ def parse_args() -> argparse.Namespace:
             "REGISTERED_MODEL_NAME",
             DEFAULT_REGISTERED_MODEL_NAME,
         ),
+    )
+    parser.add_argument(
+        "--skip-registration",
+        action="store_true",
+        help="Log the model without creating a Model Registry version.",
     )
     parser.add_argument(
         "--n-estimators",
@@ -288,6 +294,7 @@ def resolve_run_context(args: argparse.Namespace) -> RunContext:
         git_commit=git_metadata["commit"],
         git_remote=git_metadata["remote"],
         git_dirty=git_metadata["dirty"],
+        skip_registration=args.skip_registration,
     )
 
 
@@ -331,6 +338,9 @@ def build_docker_command(run_context: RunContext) -> list[str]:
         ]
     )
 
+    if run_context.skip_registration:
+        command.append("--skip_registration")
+
     return command
 
 
@@ -346,6 +356,7 @@ def print_run_summary(
     print(f"  Docker network:         {run_context.docker_network}")
     print(f"  Experiment:             {run_context.experiment_name}")
     print(f"  Registered model:       {run_context.registered_model_name}")
+    print(f"  Register model version: {not run_context.skip_registration}")
     print(f"  Dataset host path:      {run_context.training_data_path}")
     print(f"  Dataset container path: {CONTAINER_DATASET_PATH}")
     print(f"  Git repository:         {run_context.git_repository_path}")
