@@ -53,10 +53,10 @@ durante l'implementazione in `github-actions-self-hosted-wsl.md`.
 
 ## 3. Preparare runner e sicurezza
 
-- [ ] Configurare il remote GitHub aggiuntivo; rendere esplicita la destinazione
+- [x] Configurare il remote GitHub aggiuntivo; rendere esplicita la destinazione
   dei push per non usare accidentalmente Bitbucket.
 - [ ] Configurare runner WSL, etichetta e accesso al solo repository previsto.
-- [ ] Verificare Docker, kind, kubectl, MLflow, SeaweedFS e dataset runtime.
+- [ ] Verificare Git LFS in WSL, Docker, kind, kubectl, MLflow, SeaweedFS e dataset runtime.
 - [ ] Definire configurazioni persistenti, variabili e segreti senza esporli.
 - [ ] Usare il checkout Linux e il relativo commit per build e provenance.
 - [ ] Definire PR fidate e permessi minimi; niente esecuzione del codice PR con

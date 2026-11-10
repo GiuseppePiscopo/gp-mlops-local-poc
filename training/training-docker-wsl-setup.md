@@ -12,7 +12,7 @@ Questa procedura presuppone uno stack MLflow già installato e funzionante, ragg
 - Docker Desktop configurato con integrazione WSL
 - stack MLflow attivo nella rete Docker `mlops-local-network` (Tracking Server, PostgreSQL, SeaweedFS)
 - repository Windows `mlops-local-poc` completo della cartella `training/` e di `data/sample/SeoulBikeData.csv`
-- Git LFS installato, con `git lfs pull` già eseguito nel repository (il CSV del dataset è tracciato con Git LFS)
+- Git LFS installato anche in WSL; repository già configurato per LFS e file LFS già scaricati
 - accesso `sudo` nell'utente Ubuntu WSL
 - `rsync`, `sed`, `find`, `curl` disponibili in WSL
 - `python3` (>= 3.11) e Git disponibili in WSL; repository sorgente pulito e

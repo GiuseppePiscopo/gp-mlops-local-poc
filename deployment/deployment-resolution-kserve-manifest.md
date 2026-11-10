@@ -20,6 +20,7 @@ Devono inoltre essere già disponibili:
 - directory `/opt/mlops-local-poc/` posseduta dall’utente WSL corrente.
 - Git e `python3` >= 3.11 in WSL; repository sorgente pulito, completo di
   `ci-cd/scripts/prepare_image.py`.
+- Git LFS installato anche in WSL; repository già configurato per LFS e file LFS già scaricati.
 
 Il repository Windows è la sorgente autorevole dei file versionati. Il workspace operativo WSL è:
 

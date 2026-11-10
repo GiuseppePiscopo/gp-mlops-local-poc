@@ -25,6 +25,7 @@ Il test Iris nel namespace `mlops-iris-inference` non viene modificato.
 - repository completo delle directory `serving/` e `deployment/`.
 - Git e `python3` >= 3.11 in WSL; repository sorgente pulito, completo di
   `ci-cd/scripts/prepare_image.py`.
+- Git LFS installato anche in WSL; repository già configurato per LFS e file LFS già scaricati.
 
 Tutti i comandi si eseguono in un terminale **Bash in WSL**. Gli esempi assumono `champion` risolto alla Version 1; con un'altra versione usare manifest e lock corrispondenti.
 
