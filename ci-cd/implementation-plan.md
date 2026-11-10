@@ -59,7 +59,7 @@ le evidenze sono in [design.md](design.md); la procedura operativa in costruzion
 - [x] Configurare runner WSL, etichetta e accesso al solo repository previsto.
 - [x] Verificare Git LFS in WSL, Docker, kind, kubectl, MLflow, SeaweedFS e dataset runtime.
 - [x] Definire configurazioni persistenti, variabili e segreti senza esporli.
-- [ ] Usare il checkout Linux e il relativo commit per build e provenance.
+- [x] Usare il checkout Linux e il relativo commit per build e provenance.
   Verificare checkout, build e riuso con il
   [workflow Verify runner](github-actions-self-hosted-wsl.md#verificare-checkout-e-build-sul-runner).
 - [ ] Definire PR fidate e permessi minimi; niente esecuzione del codice PR con

@@ -150,19 +150,51 @@ Con il runner attivo, aprire **Actions > Verify runner > Run workflow**
 ([verify-runner.yml](../.github/workflows/verify-runner.yml)),
 selezionare `main` e avviare l'esecuzione.
 
-Verificare il job `verify-checkout` e il riepilogo dell'esecuzione.
+### Verificare l'esecuzione su GitHub
 
-Atteso:
+Aprire l'esecuzione e verificare che il job `verify-checkout` e tutti i suoi
+step siano completati con successo.
 
-- tutti gli step completati con successo;
-- checkout sotto `~/actions-runner/_work/`, su filesystem Linux;
-- commit del checkout uguale allo SHA dell'esecuzione;
-- file LFS verificati e repository pulito;
-- immagine `gp-mof-capstone-training:git-<SHA_COMPLETO>` con lo stesso commit;
-- riferimento immagine e image ID riportati nel riepilogo.
+Nel **Summary**, controllare la sezione **Linux checkout and image**:
 
-Ripetere **Run workflow** sullo stesso commit. Atteso: `Reused: True`
-nel riepilogo e image ID invariato.
+| Campo    | Valore atteso                                                            |
+| -------- | ------------------------------------------------------------------------ |
+| Commit   | SHA completo del commit selezionato per l'esecuzione                     |
+| Image    | `gp-mof-capstone-training:git-<Commit>`, con lo SHA del campo precedente |
+| Image ID | `sha256:` seguito da 64 caratteri esadecimali                            |
+| Reused   | `False` per una nuova immagine; `True` se era già presente e verificata  |
+
+### Verificare il checkout in WSL
+
+Cliccare sul job `verify-checkout` per aprire il dettaglio coi log, aprire lo step
+**Verify Linux checkout and commit**, copiare il percorso stampato dopo `Checkout:`.
+In un secondo terminale WSL, impostarlo ed eseguire:
+
+```bash
+export RUNNER_CHECKOUT="<percorso Checkout riportato nel log>"
+
+git -C "$RUNNER_CHECKOUT" rev-parse --show-toplevel
+findmnt --noheadings --output FSTYPE --target "$RUNNER_CHECKOUT"
+git -C "$RUNNER_CHECKOUT" rev-parse HEAD
+git -C "$RUNNER_CHECKOUT" status --short
+git -C "$RUNNER_CHECKOUT" lfs fsck
+```
+
+Atteso, senza altre esecuzioni nel frattempo:
+
+- root uguale a `RUNNER_CHECKOUT`, sotto `~/actions-runner/_work/`;
+- filesystem `ext4`, `xfs` o `btrfs`;
+- commit uguale al campo **Commit** del Summary;
+- nessun output da `status --short`;
+- `Git LFS fsck OK`.
+
+### Verificare il riuso dell'immagine
+
+Ripetere **Run workflow** su `main`, senza nuovi push o modifiche al branch.
+Nel nuovo Summary verificare:
+
+- **Commit**, **Image** e **Image ID** uguali alla prima esecuzione;
+- **Reused** uguale a `True`.
 
 Questa verifica costruisce soltanto l'immagine: non esegue training,
 registrazione di modelli o deploy.
