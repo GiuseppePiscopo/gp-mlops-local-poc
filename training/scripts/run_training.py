@@ -18,12 +18,14 @@ import os
 import shlex
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
 DEFAULT_EXPERIMENT_NAME = "gp-mof-capstone-training"
 DEFAULT_REGISTERED_MODEL_NAME = "gp-mof-capstone-model"
 CONTAINER_DATASET_PATH = "/data/input/SeoulBikeData.csv"
+CONTAINER_RESULT_PATH = "/app/training-result.json"
 
 
 class PreRunValidationError(Exception):
@@ -108,6 +110,7 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Log the model without creating a Model Registry version.",
     )
+    parser.add_argument("--result-json", type=Path, help="Save the completed training identifiers to this JSON file.")
     parser.add_argument(
         "--n-estimators",
         type=int,
@@ -298,7 +301,7 @@ def resolve_run_context(args: argparse.Namespace) -> RunContext:
     )
 
 
-def build_docker_command(run_context: RunContext) -> list[str]:
+def build_docker_command(run_context: RunContext, result_file: Path | None = None) -> list[str]:
     environment_variables = {
         "MLFLOW_TRACKING_URI": run_context.mlflow_tracking_uri,
         "MLFLOW_EXPERIMENT_NAME": run_context.experiment_name,
@@ -320,6 +323,8 @@ def build_docker_command(run_context: RunContext) -> list[str]:
         "--mount",
         (f"type=bind,src={run_context.training_data_path},dst={CONTAINER_DATASET_PATH},readonly"),
     ]
+    if result_file is not None:
+        command.extend(["--mount", f"type=bind,src={result_file},dst={CONTAINER_RESULT_PATH}"])
 
     for key, value in environment_variables.items():
         command.extend(["--env", f"{key}={value}"])
@@ -340,6 +345,8 @@ def build_docker_command(run_context: RunContext) -> list[str]:
 
     if run_context.skip_registration:
         command.append("--skip_registration")
+    if result_file is not None:
+        command.extend(["--result_json", CONTAINER_RESULT_PATH])
 
     return command
 
@@ -378,22 +385,55 @@ def execute_docker_command(docker_command: list[str]) -> None:
         raise SystemExit(error.returncode) from error
 
 
+def execute_training(run_context: RunContext, result_json: Path | None) -> None:
+    if result_json is None:
+        docker_command = build_docker_command(run_context)
+        print_run_summary(run_context, docker_command)
+        execute_docker_command(docker_command)
+        return
+
+    output = result_json.expanduser().resolve()
+    if output.is_relative_to(run_context.git_repository_path):
+        raise PreRunValidationError("--result-json must be outside the authoritative Git checkout.")
+    if output.exists():
+        raise PreRunValidationError(f"Training result already exists: {output}")
+    output.parent.mkdir(parents=True, exist_ok=True)
+
+    with tempfile.TemporaryDirectory(prefix="mlops-training-result-") as directory:
+        result_file = Path(directory) / "result.json"
+        result_file.touch()
+        # Only the mounted file is writable by the container's non-root user;
+        # the temporary parent directory remains private to the launcher.
+        result_file.chmod(0o666)
+
+        docker_command = build_docker_command(run_context, result_file)
+        print_run_summary(run_context, docker_command)
+        execute_docker_command(docker_command)
+
+        result = json.loads(result_file.read_text(encoding="utf-8"))
+        if (
+            not isinstance(result, dict)
+            or any(not isinstance(result.get(key), str) or not result[key] for key in ("run_id", "model_uri"))
+            or result.get("git_commit") != run_context.git_commit
+        ):
+            raise PreRunValidationError("Training result is incomplete or does not match the checkout commit.")
+        with output.open("x", encoding="utf-8") as stream:
+            stream.write(json.dumps(result, indent=2) + "\n")
+
+    print(f"Training result: {output}")
+
+
 def main() -> None:
     try:
         args = parse_args()
         run_context = resolve_run_context(args)
+        execute_training(run_context, args.result_json)
     except PreRunValidationError as error:
         print(f"Pre-run validation error: {error}", file=sys.stderr)
         raise SystemExit(2) from error
-
-    docker_command = build_docker_command(run_context)
-
-    print_run_summary(
-        run_context=run_context,
-        docker_command=docker_command,
-    )
-
-    execute_docker_command(docker_command)
+    except (OSError, ValueError) as error:
+        print(f"Training execution error: {error}", file=sys.stderr)
+        raise SystemExit(1) from error
 
 
 if __name__ == "__main__":

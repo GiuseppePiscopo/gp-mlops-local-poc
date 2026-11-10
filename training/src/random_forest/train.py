@@ -10,6 +10,7 @@ itself, which forwards the request to SeaweedFS using its own credentials.
 
 import argparse
 import hashlib
+import json
 import os
 from datetime import UTC, datetime
 from pathlib import Path
@@ -54,6 +55,9 @@ def parse_args() -> argparse.Namespace:
         "--skip_registration",
         action="store_true",
         help="Log the model without creating a Model Registry version.",
+    )
+    parser.add_argument(
+        "--result_json", type=Path, help="Write the completed run and logged model identifiers as JSON."
     )
     parser.add_argument(
         "--fail_for_alert_test",
@@ -156,7 +160,7 @@ def main(args: argparse.Namespace) -> None:
     mlflow.set_tracking_uri(tracking_uri)
     mlflow.set_experiment(experiment_name)
 
-    with mlflow.start_run():
+    with mlflow.start_run() as run:
         mlflow.set_tags(get_provenance_tags())
         mlflow.set_tags(get_dataset_tags(args.training_data))
 
@@ -207,7 +211,7 @@ def main(args: argparse.Namespace) -> None:
             model_output=model.predict(input_example),
         )
 
-        mlflow.sklearn.log_model(
+        model_info = mlflow.sklearn.log_model(
             sk_model=model,
             name=MODEL_ARTIFACT_NAME,
             signature=signature,
@@ -218,6 +222,14 @@ def main(args: argparse.Namespace) -> None:
             ],
             registered_model_name=None if args.skip_registration else args.registered_model_name,
         )
+
+    result = {
+        "run_id": run.info.run_id,
+        "model_uri": model_info.model_uri,
+        "git_commit": os.getenv("GIT_COMMIT", "unknown"),
+    }
+    if args.result_json is not None:
+        args.result_json.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
 
 
 if __name__ == "__main__":

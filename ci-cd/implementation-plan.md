@@ -73,7 +73,7 @@ le evidenze sono in [design.md](design.md); la procedura operativa in costruzion
   Applicare il perimetro [PR fidate e permessi](design.md#pr-fidate-e-permessi).
 - [x] Implementare training dal checkout con immagine per commit e dati runtime,
   usando [configurazione e accessi del runner](design.md#configurazione-e-accessi-del-runner).
-- [ ] Separare logging da registrazione nel codice/launcher; aggiornare CLI
+- [x] Separare logging da registrazione nel codice/launcher; aggiornare CLI
   e procedura manuale, mantenendo utilizzabile il percorso non orchestrato.
 - [ ] Implementare snapshot champion, identità del test set e gate relativo.
 - [ ] Implementare bootstrap esplicito con soglie assolute e controlli dedicati.

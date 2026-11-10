@@ -28,6 +28,7 @@ jobs:
     env:
       GIT_REPOSITORY: ${{ github.workspace }}
       BUILD_RESULT: pipeline-build-${{ github.run_id }}-${{ github.run_attempt }}.json
+      TRAINING_RESULT: training-${{ github.run_id }}-${{ github.run_attempt }}.json
       TRAINING_DATA_HOST_PATH: /opt/mlops-local-poc/training/data/input/SeoulBikeData.csv
       DOCKER_NETWORK: mlops-local-network
       MLFLOW_TRACKING_URI: http://mlflow:5000
@@ -64,8 +65,18 @@ jobs:
           unset IMAGE_TAG
           python3 "$GIT_REPOSITORY/training/scripts/run_training.py" \
             --skip-registration \
+            --result-json "$RUNNER_TEMP/$TRAINING_RESULT" \
             --n-estimators 100 \
             --max-depth 10
+
+      - name: Report training identifiers
+        run: |
+          set -euo pipefail
+          {
+            printf '%s\n' '## Training result' '' '```json'
+            cat "$RUNNER_TEMP/$TRAINING_RESULT"
+            printf '%s\n' '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Report pipeline scope
         run: |
