@@ -1,0 +1,139 @@
+# CI/CD GitHub Actions con runner WSL
+
+Questa procedura configura un runner GitHub Actions nel laboratorio WSL con
+Docker e KinD. Le sezioni disponibili coprono la preparazione del runner
+e degli accessi locali.
+
+## Prerequisiti
+
+- Ubuntu WSL2 x64, utente non root, Docker Desktop con integrazione WSL;
+- Git, Git LFS, `python3` >= 3.11, `kind`, `kubectl` e `curl` disponibili in WSL;
+- repository già configurato per LFS, con file LFS scaricati;
+- repository GitHub `GiuseppePiscopo/gp-mlops-local-poc` privato, con accesso
+  amministratore;
+- [stack MLflow](../mlflow/mlflow-docker-wsl-setup.md) attivo nella rete
+  `mlops-local-network`;
+- [dataset di training](../training/training-docker-wsl-setup.md#preparare-il-dataset)
+  disponibile in `/opt/mlops-local-poc/training/data/input/SeoulBikeData.csv`;
+- cluster `mlops-test`, contesto `kind-mlops-test` e
+  [serving KServe](../serving/serving-kserve-model.md) operativo;
+- credenziali locali in `/opt/mlops-local-poc/mlflow/.env` e kubeconfig
+  dell'utente WSL in `$HOME/.kube/config`.
+
+Tutti i comandi si eseguono in **Bash in WSL**, salvo le operazioni indicate
+nell'interfaccia GitHub.
+
+## Avvertenze operative
+
+- Eseguire sul runner soltanto codice fidato.
+- Non pubblicare `.env`, kubeconfig, credenziali del runner o contenuti del
+  Secret, neppure come log o artifact.
+- Non esportare globalmente `IMAGE_TAG` o `GIT_REPOSITORY` nel runner.
+- Prima di cambiare la visibilità del repository, verificare le protezioni
+  per le PR e la disponibilità dell'approval dell'environment `production`.
+
+## Configurare il remote GitHub
+
+Nel repository locale, verificare i remote:
+
+```bash
+git remote -v
+```
+
+Se manca `github`, aggiungerlo:
+
+```bash
+git remote add github https://github.com/GiuseppePiscopo/gp-mlops-local-poc.git
+```
+
+Verificare la destinazione dei push:
+
+```bash
+git remote get-url --push github
+git remote get-url --push origin
+```
+
+Atteso: `github` punta a `https://github.com/GiuseppePiscopo/gp-mlops-local-poc.git`;
+`origin` mantiene l'URL Bitbucket esistente.
+
+Per inviare modifiche a GitHub, specificare sempre il remote:
+
+```bash
+git push github main
+```
+
+## Registrare il runner
+
+Nel repository GitHub, aprire **Settings > Actions > Runners > New self-hosted
+runner** e scegliere **Linux / x64**.
+
+Preparare la directory nel filesystem Linux:
+
+```bash
+mkdir -p ~/actions-runner
+cd ~/actions-runner
+```
+
+Eseguire i comandi GitHub di download, verifica checksum ed estrazione, senza
+ripetere la creazione della directory. La verifica checksum deve terminare
+con `OK`.
+
+Eseguire il comando `./config.sh` mostrato da GitHub e usare:
+
+| Campo                      | Valore        |
+| -------------------------- | ------------- |
+| Runner group, se richiesto | predefinito   |
+| Runner name                | `mlops-wsl`   |
+| Additional labels          | `mlops-local` |
+| Work folder                | `_work`       |
+
+Usare il token temporaneo solo nel terminale locale; non salvarlo nel
+repository, nei documenti o nei log condivisi.
+
+Verificare in **Settings > Actions > Runners** la presenza di `mlops-wsl`,
+con etichette `self-hosted`, `Linux`, `X64`, `mlops-local`.
+
+## Avviare il runner
+
+Avviare il runner e lasciare aperto il terminale:
+
+```bash
+cd ~/actions-runner
+./run.sh
+```
+
+Atteso: `Listening for Jobs` nel terminale e runner `Idle` su GitHub.
+Terminare con `Ctrl+C` solo quando non ci sono job in esecuzione.
+
+## Verificare gli accessi locali
+
+In un secondo terminale, con lo stesso utente WSL del runner, verificare
+lettura e permessi dei file locali senza stamparne il contenuto:
+
+```bash
+test -r /opt/mlops-local-poc/mlflow/.env
+test -r "$HOME/.kube/config"
+stat -c '%a %U %n' /opt/mlops-local-poc/mlflow/.env "$HOME/.kube/config"
+```
+
+Atteso: entrambi i `test` terminano senza errori; `stat` mostra permessi `600`
+e proprietario corrispondente all'utente del runner.
+
+Verificare il dataset, Docker e il contesto Kubernetes:
+
+```bash
+test -r /opt/mlops-local-poc/training/data/input/SeoulBikeData.csv
+sha256sum /opt/mlops-local-poc/training/data/input/SeoulBikeData.csv
+
+docker info --format '{{.ServerVersion}}'
+
+kubectl --context kind-mlops-test get nodes
+kubectl --context kind-mlops-test -n gp-mof-capstone-serving \
+  get inferenceservice gp-mof-capstone-model
+```
+
+Atteso: dataset leggibile e hash uguale a quello verificato nella preparazione
+del training; versione Docker stampata, nodo `Ready` e servizio `READY=True`.
+
+Per aggiornare il Secret S3 e verificarne l'endpoint, seguire
+[Applicare il Secret S3](../serving/serving-kserve-model.md#applicare-il-secret-s3).

@@ -1,12 +1,13 @@
 # Piano di implementazione CI/CD locale
 
 Documento temporaneo per avanzamento e ripresa delle sessioni. I contratti e
-le evidenze sono in [design.md](design.md); la procedura operativa sarà creata
-durante l'implementazione in `github-actions-self-hosted-wsl.md`.
+le evidenze sono in [design.md](design.md); la procedura operativa in costruzione
+è [github-actions-self-hosted-wsl.md](github-actions-self-hosted-wsl.md).
 
 ## Indice della progettazione
 
 - [Architettura e perimetro](design.md#architettura-e-perimetro)
+- [Configurazione e accessi del runner](design.md#configurazione-e-accessi-del-runner)
 - [Stato iniziale](design.md#stato-iniziale)
 - [Training, evaluation e registrazione](design.md#training-evaluation-e-registrazione)
 - [Identificazione e passaggio tra job](design.md#identificazione-e-passaggio-tra-job)
@@ -55,9 +56,9 @@ durante l'implementazione in `github-actions-self-hosted-wsl.md`.
 
 - [x] Configurare il remote GitHub aggiuntivo; rendere esplicita la destinazione
   dei push per non usare accidentalmente Bitbucket.
-- [ ] Configurare runner WSL, etichetta e accesso al solo repository previsto.
-- [ ] Verificare Git LFS in WSL, Docker, kind, kubectl, MLflow, SeaweedFS e dataset runtime.
-- [ ] Definire configurazioni persistenti, variabili e segreti senza esporli.
+- [x] Configurare runner WSL, etichetta e accesso al solo repository previsto.
+- [x] Verificare Git LFS in WSL, Docker, kind, kubectl, MLflow, SeaweedFS e dataset runtime.
+- [x] Definire configurazioni persistenti, variabili e segreti senza esporli.
 - [ ] Usare il checkout Linux e il relativo commit per build e provenance.
 - [ ] Definire PR fidate e permessi minimi; niente esecuzione del codice PR con
   pull_request_target. Non considerare i filtri una barriera di isolamento.
@@ -65,7 +66,8 @@ durante l'implementazione in `github-actions-self-hosted-wsl.md`.
 ## 4. Implementare workflow e job
 
 - [ ] Aggiungere trigger PR, push su main e avvio manuale; PR senza deploy.
-- [ ] Implementare training dal checkout con immagine per commit e dati runtime.
+- [ ] Implementare training dal checkout con immagine per commit e dati runtime,
+  usando [configurazione e accessi del runner](design.md#configurazione-e-accessi-del-runner).
 - [ ] Separare logging da registrazione nel codice/launcher; aggiornare CLI
   e procedura manuale, mantenendo utilizzabile il percorso non orchestrato.
 - [ ] Implementare snapshot champion, identità del test set e gate relativo.

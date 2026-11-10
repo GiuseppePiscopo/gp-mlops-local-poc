@@ -1,8 +1,8 @@
 # Progettazione CI/CD MLOps locale
 
 Contratti ed evidenze per il [piano di implementazione](implementation-plan.md).
-Le decisioni non equivalgono a funzionalità già implementate. La futura
-procedura operativa sarà `github-actions-self-hosted-wsl.md`.
+Le decisioni non equivalgono a funzionalità già implementate. La procedura
+operativa in costruzione è [github-actions-self-hosted-wsl.md](github-actions-self-hosted-wsl.md).
 
 ## Architettura e perimetro
 
@@ -35,6 +35,37 @@ procedura operativa sarà `github-actions-self-hosted-wsl.md`.
   ma non isolano il runner con accesso a Docker e rete locale. Eseguire solo
   codice PR fidato, limitare GITHUB_TOKEN e non usare pull_request_target per
   eseguire il codice della PR.
+
+## Configurazione e accessi del runner
+
+- Il workflow deve impostare esplicitamente i valori non segreti, senza
+  dipendere dagli export del terminale che avvia il runner. Non servono
+  Actions repository variables aggiuntive per la configurazione attuale.
+- Dataset runtime esterno al checkout, montato in sola lettura:
+  `TRAINING_DATA_HOST_PATH=/opt/mlops-local-poc/training/data/input/SeoulBikeData.csv`.
+- Rete dei container: `DOCKER_NETWORK=mlops-local-network` e
+  `DEPLOYMENT_RESOLVER_NETWORK=mlops-local-network`.
+- Tracking dai container: `MLFLOW_TRACKING_URI=http://mlflow:5000`;
+  esperimento `MLFLOW_EXPERIMENT_NAME=gp-mof-capstone-training` e modello
+  `REGISTERED_MODEL_NAME=gp-mof-capstone-model`.
+- Cluster `mlops-test`, contesto esplicito `kind-mlops-test`, kubeconfig
+  dell'utente runner in `$HOME/.kube/config`.
+- Conservare la configurazione non segreta del resolver in
+  [deployment-target.local.yaml](../deployment/config/deployment-target.local.yaml)
+  e dello storage serving in
+  [storage-secret.env](../serving/config/storage-secret.env), senza duplicare
+  nomi delle risorse e prefissi degli artifact in nuove configurazioni.
+- `GIT_REPOSITORY` deve identificare `GITHUB_WORKSPACE`, checkout Linux del
+  job. Tag e identità delle immagini derivano dal commit del job, non da
+  variabili persistenti del runner.
+- Credenziali S3 nel file locale `/opt/mlops-local-poc/mlflow/.env`;
+  kubeconfig e file credenziali restano fuori dal checkout, con permessi
+  `600`. Il training accede agli artifact tramite il proxy MLflow senza
+  ricevere credenziali S3; lo script serving aggiorna il Secret Kubernetes.
+- Non servono nuovi Actions secrets per questi accessi. Usare il
+  `GITHUB_TOKEN` fornito da Actions per il repository, senza PAT persistente
+  nel checkout. Non pubblicare credenziali, kubeconfig o contenuti dei Secret
+  nei log o negli artifact.
 
 ## Stato iniziale
 
