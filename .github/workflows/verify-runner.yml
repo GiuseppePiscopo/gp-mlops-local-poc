@@ -15,7 +15,7 @@ jobs:
         shell: bash
     env:
       GIT_REPOSITORY: ${{ github.workspace }}
-      BUILD_RESULT: ${{ runner.temp }}/checkout-build-${{ github.run_id }}-${{ github.run_attempt }}.json
+      BUILD_RESULT: checkout-build-${{ github.run_id }}-${{ github.run_attempt }}.json
     steps:
       - name: Checkout with LFS
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -32,11 +32,11 @@ jobs:
         run: |
           set -euo pipefail
           unset IMAGE_TAG
-          bash "$GIT_REPOSITORY/training/scripts/build-image.sh" > "$BUILD_RESULT"
+          bash "$GIT_REPOSITORY/training/scripts/build-image.sh" > "$RUNNER_TEMP/$BUILD_RESULT"
 
       - name: Verify image provenance
         run: |
           python3 "$GIT_REPOSITORY/ci-cd/scripts/verify-image-provenance.py" \
-            --build-result "$BUILD_RESULT" \
+            --build-result "$RUNNER_TEMP/$BUILD_RESULT" \
             --expected-commit "$GITHUB_SHA" \
             --summary "$GITHUB_STEP_SUMMARY"
