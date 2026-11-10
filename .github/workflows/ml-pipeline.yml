@@ -60,28 +60,29 @@ jobs:
             --summary "$GITHUB_STEP_SUMMARY"
 
       - name: Train without model registration
+        id: training
         run: |
           set -euo pipefail
           unset IMAGE_TAG
           python3 "$GIT_REPOSITORY/training/scripts/run_training.py" \
             --skip-registration \
+            --evaluate-champion \
             --result-json "$RUNNER_TEMP/$TRAINING_RESULT" \
             --n-estimators 100 \
             --max-depth 10
 
-      - name: Report training identifiers
+      - name: Report training and evaluation
+        if: ${{ !cancelled() && steps.training.outcome != 'skipped' }}
         run: |
           set -euo pipefail
-          {
-            printf '%s\n' '## Training result' '' '```json'
-            cat "$RUNNER_TEMP/$TRAINING_RESULT"
-            printf '%s\n' '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          python3 "$GIT_REPOSITORY/ci-cd/scripts/report-training-result.py" \
+            --result "$RUNNER_TEMP/$TRAINING_RESULT" \
+            --summary "$GITHUB_STEP_SUMMARY"
 
       - name: Report pipeline scope
         run: |
           printf '%s\n' \
             '## Pipeline scope' \
             '' \
-            'Training and metric logging completed without Model Registry registration. Relative evaluation gate and deployment are not implemented yet.' \
+            'Training and relative evaluation completed. Model Registry registration and deployment are not implemented yet.' \
             >> "$GITHUB_STEP_SUMMARY"

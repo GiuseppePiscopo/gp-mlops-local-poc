@@ -1,0 +1,100 @@
+import argparse
+import hashlib
+import json
+import os
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+import numpy as np
+import pandas as pd
+from random_forest import train
+
+import mlflow
+
+
+class EvaluationIntegrationTests(unittest.TestCase):
+    def test_real_models_snapshot_and_rejected_gate_without_registration(self):
+        previous_tracking = mlflow.get_tracking_uri()
+        self.addCleanup(mlflow.set_tracking_uri, previous_tracking)
+        with tempfile.TemporaryDirectory(prefix="mlops-gate-integration-") as directory:
+            root = Path(directory)
+            tracking = f"sqlite:///{root / 'mlflow.db'}"
+            environment = {
+                "MLFLOW_TRACKING_URI": tracking,
+                "MLFLOW_EXPERIMENT_NAME": "isolated-gate",
+                "GIT_COMMIT": "a" * 40,
+            }
+            with patch.dict(os.environ, environment):
+                mlflow.set_tracking_uri(tracking)
+                mlflow.create_experiment("isolated-gate", artifact_location=str(root / "artifacts"))
+                path = root / "data.csv"
+                values = np.arange(100, dtype=float)
+                pd.DataFrame(
+                    {
+                        "Date": ["date"] * 100,
+                        "Seasons": ["Summer", "Winter"] * 50,
+                        "Holiday": ["No Holiday"] * 100,
+                        "Functioning Day": ["Yes"] * 100,
+                        "Temperature": values,
+                        "Rented Bike Count": values**2 + 1,
+                    }
+                ).to_csv(path, index=False)
+                original_bytes = path.read_bytes()
+                args = argparse.Namespace(
+                    training_data=str(path),
+                    n_estimators=10,
+                    max_depth=5,
+                    registered_model_name="isolated-model",
+                    skip_registration=False,
+                    result_json=root / "baseline.json",
+                    evaluate_champion=False,
+                    fail_for_alert_test=False,
+                )
+
+                with patch.object(train, "RandomForestRegressor", wraps=train.RandomForestRegressor) as forest:
+                    train.main(args)
+                    self.assertEqual(forest.call_args.kwargs["n_jobs"], -1)
+                    client = mlflow.MlflowClient()
+                    client.set_registered_model_alias("isolated-model", "champion", "1")
+                    args.skip_registration = True
+                    args.evaluate_champion = True
+                    args.result_json = root / "candidate.json"
+                    train_model = train.train_model
+
+                    def mutate_after_training(*a, **kwargs):
+                        model = train_model(*a, **kwargs)
+                        path.write_text("changed CSV after training")
+                        return model
+
+                    with patch.object(train, "train_model", side_effect=mutate_after_training):
+                        train.main(args)
+                    result = json.loads(args.result_json.read_text())
+                    report = result["evaluation"]
+                    self.assertTrue(report["passed"])
+                    self.assertEqual(report["candidate_metrics"], report["champion_metrics"])
+                    self.assertEqual(report["test_set"]["dataset_sha256"], hashlib.sha256(original_bytes).hexdigest())
+                    self.assertEqual(len(report["test_set"]["test_row_indices"]), 20)
+                    self.assertEqual(client.get_run(result["run_id"]).info.status, "FINISHED")
+                    self.assertEqual(
+                        {a.path for a in client.list_artifacts(result["run_id"], "evaluation")},
+                        {"evaluation/champion-snapshot.json", "evaluation/test-set.json", "evaluation/report.json"},
+                    )
+
+                    path.write_bytes(original_bytes)
+                    args.n_estimators = 1
+                    args.max_depth = 1
+                    args.result_json = root / "rejected.json"
+                    with self.assertRaises(SystemExit) as failure:
+                        train.main(args)
+                    self.assertEqual(failure.exception.code, 1)
+                    rejected = json.loads(args.result_json.read_text())
+                    self.assertFalse(rejected["evaluation"]["passed"])
+                    self.assertEqual(client.get_run(rejected["run_id"]).info.status, "FINISHED")
+                    self.assertEqual(len(client.search_model_versions("name='isolated-model'")), 1)
+                    self.assertEqual(str(client.get_model_version_by_alias("isolated-model", "champion").version), "1")
+
+
+if __name__ == "__main__":
+    unittest.main()

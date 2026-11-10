@@ -13,9 +13,12 @@ import hashlib
 import json
 import os
 from datetime import UTC, datetime
+from io import BytesIO
 from pathlib import Path
 
 import mlflow.sklearn
+import pandas as pd
+from common.evaluation import evaluate_candidate, snapshot_champion, test_set_identity
 from common.training_utils import RANDOM_SEED, TEST_SIZE, eval_model, get_data, prepare_data
 from mlflow.models import infer_signature
 from sklearn.ensemble import RandomForestRegressor
@@ -59,6 +62,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--result_json", type=Path, help="Write the completed run and logged model identifiers as JSON."
     )
+    parser.add_argument("--evaluate_champion", action="store_true", help="Compare against a fixed champion snapshot.")
     parser.add_argument(
         "--fail_for_alert_test",
         type=lambda value: value.lower() == "true",
@@ -145,6 +149,8 @@ def train_model(
 
 
 def main(args: argparse.Namespace) -> None:
+    if args.evaluate_champion and (not args.skip_registration or args.result_json is None):
+        raise ValueError("Champion evaluation requires --skip_registration and --result_json.")
     if args.fail_for_alert_test:
         raise RuntimeError("ALERT TEST: intentional training job failure")
 
@@ -158,11 +164,20 @@ def main(args: argparse.Namespace) -> None:
     )
 
     mlflow.set_tracking_uri(tracking_uri)
+    champion = None
+    dataset_bytes = None
+    if args.evaluate_champion:
+        champion = snapshot_champion(mlflow.MlflowClient(), args.registered_model_name)
+        dataset_bytes = Path(args.training_data).read_bytes()
     mlflow.set_experiment(experiment_name)
 
     with mlflow.start_run() as run:
         mlflow.set_tags(get_provenance_tags())
-        mlflow.set_tags(get_dataset_tags(args.training_data))
+        dataset_tags = get_dataset_tags(args.training_data)
+        if dataset_bytes is not None:
+            dataset_tags["dataset.sha256"] = hashlib.sha256(dataset_bytes).hexdigest()
+            dataset_tags["dataset.size_bytes"] = str(len(dataset_bytes))
+        mlflow.set_tags(dataset_tags)
 
         mlflow.log_params(
             {
@@ -174,8 +189,13 @@ def main(args: argparse.Namespace) -> None:
             }
         )
 
-        df = get_data(args.training_data)
+        df = pd.read_csv(BytesIO(dataset_bytes)) if dataset_bytes is not None else get_data(args.training_data)
         X_train, X_test, y_train, y_test = prepare_data(df)
+        test_set = {}
+        if champion is not None:
+            test_set = test_set_identity(dataset_tags["dataset.sha256"], X_test, y_test)
+            mlflow.log_dict(champion, "evaluation/champion-snapshot.json")
+            mlflow.log_dict(test_set, "evaluation/test-set.json")
 
         mlflow.log_params(
             {
@@ -223,13 +243,22 @@ def main(args: argparse.Namespace) -> None:
             registered_model_name=None if args.skip_registration else args.registered_model_name,
         )
 
-    result = {
-        "run_id": run.info.run_id,
-        "model_uri": model_info.model_uri,
-        "git_commit": os.getenv("GIT_COMMIT", "unknown"),
-    }
+        result: dict = {
+            "run_id": run.info.run_id,
+            "model_uri": model_info.model_uri,
+            "git_commit": os.getenv("GIT_COMMIT", "unknown"),
+        }
+        if champion is not None:
+            report = evaluate_candidate(result.copy(), champion, test_set, X_test, y_test)
+            mlflow.log_dict(report, "evaluation/report.json")
+            mlflow.set_tag("evaluation.passed", str(report["passed"]).lower())
+            result["evaluation"] = report
+
     if args.result_json is not None:
-        args.result_json.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+        args.result_json.write_text(json.dumps(result, indent=2, allow_nan=False) + "\n", encoding="utf-8")
+    if champion is not None and not result["evaluation"]["passed"]:
+        print("Evaluation rejected: candidate RMSE exceeds champion RMSE.")
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

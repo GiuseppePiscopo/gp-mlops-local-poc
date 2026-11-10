@@ -32,6 +32,7 @@ class TrainingRegistrationTests(unittest.TestCase):
                     skip_registration=skip,
                     fail_for_alert_test=False,
                     result_json=output,
+                    evaluate_champion=False,
                 )
                 features = MagicMock()
                 with (
@@ -91,6 +92,7 @@ class TrainingRegistrationTests(unittest.TestCase):
             skip_registration=True,
             fail_for_alert_test=False,
             result_json=None,
+            evaluate_champion=False,
         )
         with (
             patch.dict("os.environ", {"MLFLOW_TRACKING_URI": "http://unused"}),
@@ -174,6 +176,38 @@ class TrainingRegistrationTests(unittest.TestCase):
                         launcher.execute_training(context, output)
                 execute.assert_not_called()
             self.assertEqual(existing.read_text(), "previous")
+
+    def test_gate_failure_exports_result_and_preserves_nonzero_exit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            context = MagicMock(
+                git_commit="a" * 40,
+                git_repository_path=root / "checkout",
+                skip_registration=True,
+                evaluate_champion=True,
+                image_digest="",
+            )
+            result = {
+                "run_id": "run",
+                "model_uri": "models:/m",
+                "git_commit": context.git_commit,
+                "evaluation": {"passed": False},
+            }
+
+            def execute(command):
+                mount = next(
+                    v for v in command if isinstance(v, str) and v.endswith(f"dst={launcher.CONTAINER_RESULT_PATH}")
+                )
+                Path(mount.split("src=", 1)[1].split(",dst=", 1)[0]).write_text(json.dumps(result))
+                self.assertIn("--evaluate_champion", command)
+                raise SystemExit(1)
+
+            output = root / "result.json"
+            with patch.object(launcher, "execute_docker_command", side_effect=execute):
+                with self.assertRaises(SystemExit) as failure:
+                    launcher.execute_training(context, output)
+            self.assertEqual(failure.exception.code, 1)
+            self.assertEqual(json.loads(output.read_text()), result)
 
 
 if __name__ == "__main__":

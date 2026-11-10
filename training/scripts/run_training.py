@@ -49,6 +49,7 @@ class RunContext:
     git_remote: str
     git_dirty: str
     skip_registration: bool
+    evaluate_champion: bool
 
 
 def get_environment_int(name: str, default: int) -> int:
@@ -111,6 +112,7 @@ def parse_args() -> argparse.Namespace:
         help="Log the model without creating a Model Registry version.",
     )
     parser.add_argument("--result-json", type=Path, help="Save the completed training identifiers to this JSON file.")
+    parser.add_argument("--evaluate-champion", action="store_true", help="Apply the relative RMSE gate against champion.")
     parser.add_argument(
         "--n-estimators",
         type=int,
@@ -236,6 +238,8 @@ def get_image_identity(git_repository: Path, image_tag: str | None) -> dict:
 
 
 def resolve_run_context(args: argparse.Namespace) -> RunContext:
+    if args.evaluate_champion and (not args.skip_registration or args.result_json is None):
+        raise PreRunValidationError("--evaluate-champion requires --skip-registration and --result-json.")
     training_data = require_value(
         args.training_data,
         "--training-data / TRAINING_DATA_HOST_PATH",
@@ -298,6 +302,7 @@ def resolve_run_context(args: argparse.Namespace) -> RunContext:
         git_remote=git_metadata["remote"],
         git_dirty=git_metadata["dirty"],
         skip_registration=args.skip_registration,
+        evaluate_champion=args.evaluate_champion,
     )
 
 
@@ -345,6 +350,8 @@ def build_docker_command(run_context: RunContext, result_file: Path | None = Non
 
     if run_context.skip_registration:
         command.append("--skip_registration")
+    if run_context.evaluate_champion:
+        command.append("--evaluate_champion")
     if result_file is not None:
         command.extend(["--result_json", CONTAINER_RESULT_PATH])
 
@@ -408,8 +415,14 @@ def execute_training(run_context: RunContext, result_json: Path | None) -> None:
 
         docker_command = build_docker_command(run_context, result_file)
         print_run_summary(run_context, docker_command)
-        execute_docker_command(docker_command)
-
+        exit_code = 0
+        try:
+            execute_docker_command(docker_command)
+        except SystemExit as error:
+            # A rejected gate still exports the completed training and evaluation report.
+            if not result_file.stat().st_size:
+                raise
+            exit_code = error.code
         result = json.loads(result_file.read_text(encoding="utf-8"))
         if (
             not isinstance(result, dict)
@@ -421,6 +434,8 @@ def execute_training(run_context: RunContext, result_json: Path | None) -> None:
             stream.write(json.dumps(result, indent=2) + "\n")
 
     print(f"Training result: {output}")
+    if exit_code:
+        raise SystemExit(exit_code)
 
 
 def main() -> None:

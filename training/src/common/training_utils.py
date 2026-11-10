@@ -56,7 +56,7 @@ def prepare_data(
     return X_train, X_test, y_train, y_test
 
 
-def eval_model(
+def calculate_metrics(
     model,
     X_test: pd.DataFrame,
     y_test: pd.Series,
@@ -80,6 +80,15 @@ def eval_model(
         "mape": float(mape),
     }
 
+    return metrics
+
+
+def eval_model(
+    model,
+    X_test: pd.DataFrame,
+    y_test: pd.Series,
+) -> dict[str, float]:
+    metrics = calculate_metrics(model, X_test, y_test)
     print(f"MAE: {metrics['mae']}")
     print(f"RMSE: {metrics['rmse']}")
     print(f"R2: {metrics['r2']}")

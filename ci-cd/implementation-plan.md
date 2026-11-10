@@ -75,7 +75,7 @@ le evidenze sono in [design.md](design.md); la procedura operativa in costruzion
   usando [configurazione e accessi del runner](design.md#configurazione-e-accessi-del-runner).
 - [x] Separare logging da registrazione nel codice/launcher; aggiornare CLI
   e procedura manuale, mantenendo utilizzabile il percorso non orchestrato.
-- [ ] Implementare snapshot champion, identità del test set e gate relativo.
+- [x] Implementare snapshot champion, identità del test set e gate relativo.
 - [ ] Implementare bootstrap esplicito con soglie assolute e controlli dedicati.
 - [ ] Produrre risultati JSON, report e output tra job secondo il design;
   pubblicare metriche ed esiti nel riepilogo del workflow.
