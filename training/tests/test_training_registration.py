@@ -33,6 +33,7 @@ class TrainingRegistrationTests(unittest.TestCase):
                     fail_for_alert_test=False,
                     result_json=output,
                     evaluate_champion=False,
+                    input_snapshot=None,
                 )
                 features = MagicMock()
                 with (
@@ -93,6 +94,7 @@ class TrainingRegistrationTests(unittest.TestCase):
             fail_for_alert_test=False,
             result_json=None,
             evaluate_champion=False,
+            input_snapshot=None,
         )
         with (
             patch.dict("os.environ", {"MLFLOW_TRACKING_URI": "http://unused"}),

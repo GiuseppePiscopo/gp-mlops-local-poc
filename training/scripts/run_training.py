@@ -26,6 +26,7 @@ DEFAULT_EXPERIMENT_NAME = "gp-mof-capstone-training"
 DEFAULT_REGISTERED_MODEL_NAME = "gp-mof-capstone-model"
 CONTAINER_DATASET_PATH = "/data/input/SeoulBikeData.csv"
 CONTAINER_RESULT_PATH = "/app/training-result.json"
+CONTAINER_SNAPSHOT_PATH = "/data/input/snapshot.json"
 
 
 class PreRunValidationError(Exception):
@@ -50,6 +51,7 @@ class RunContext:
     git_dirty: str
     skip_registration: bool
     evaluate_champion: bool
+    input_snapshot: Path | None
 
 
 def get_environment_int(name: str, default: int) -> int:
@@ -112,7 +114,10 @@ def parse_args() -> argparse.Namespace:
         help="Log the model without creating a Model Registry version.",
     )
     parser.add_argument("--result-json", type=Path, help="Save the completed training identifiers to this JSON file.")
-    parser.add_argument("--evaluate-champion", action="store_true", help="Apply the relative RMSE gate against champion.")
+    parser.add_argument(
+        "--evaluate-champion", action="store_true", help="Apply the relative RMSE gate against champion."
+    )
+    parser.add_argument("--input-snapshot", type=Path, help="Use the prepared dataset and champion snapshot.")
     parser.add_argument(
         "--n-estimators",
         type=int,
@@ -238,6 +243,8 @@ def get_image_identity(git_repository: Path, image_tag: str | None) -> dict:
 
 
 def resolve_run_context(args: argparse.Namespace) -> RunContext:
+    if args.input_snapshot is not None and not args.evaluate_champion:
+        raise PreRunValidationError("--input-snapshot requires --evaluate-champion.")
     if args.evaluate_champion and (not args.skip_registration or args.result_json is None):
         raise PreRunValidationError("--evaluate-champion requires --skip-registration and --result-json.")
     training_data = require_value(
@@ -259,6 +266,9 @@ def resolve_run_context(args: argparse.Namespace) -> RunContext:
 
     training_data_path = Path(training_data).expanduser().resolve()
     git_repository_path = Path(git_repository).expanduser().resolve()
+    input_snapshot = args.input_snapshot.expanduser().resolve() if args.input_snapshot is not None else None
+    if input_snapshot is not None and not input_snapshot.is_file():
+        raise PreRunValidationError(f"Input snapshot not found: {input_snapshot}")
 
     if not training_data_path.is_file():
         raise PreRunValidationError(f"Training data file not found: {training_data_path}")
@@ -303,6 +313,7 @@ def resolve_run_context(args: argparse.Namespace) -> RunContext:
         git_dirty=git_metadata["dirty"],
         skip_registration=args.skip_registration,
         evaluate_champion=args.evaluate_champion,
+        input_snapshot=input_snapshot,
     )
 
 
@@ -330,6 +341,10 @@ def build_docker_command(run_context: RunContext, result_file: Path | None = Non
     ]
     if result_file is not None:
         command.extend(["--mount", f"type=bind,src={result_file},dst={CONTAINER_RESULT_PATH}"])
+    if run_context.input_snapshot is not None:
+        command.extend(
+            ["--mount", f"type=bind,src={run_context.input_snapshot},dst={CONTAINER_SNAPSHOT_PATH},readonly"]
+        )
 
     for key, value in environment_variables.items():
         command.extend(["--env", f"{key}={value}"])
@@ -352,6 +367,8 @@ def build_docker_command(run_context: RunContext, result_file: Path | None = Non
         command.append("--skip_registration")
     if run_context.evaluate_champion:
         command.append("--evaluate_champion")
+    if run_context.input_snapshot is not None:
+        command.extend(["--input_snapshot", CONTAINER_SNAPSHOT_PATH])
     if result_file is not None:
         command.extend(["--result_json", CONTAINER_RESULT_PATH])
 

@@ -78,7 +78,7 @@ le evidenze sono in [design.md](design.md); la procedura operativa in costruzion
 - [x] Implementare snapshot champion, identità del test set e gate relativo.
 - [ ] Separare preparazione, training ed evaluation in step dello stesso job,
   secondo [Confronto e prove PR](design.md#confronto-e-prove-pr):
-  - [ ] Acquisire prima del training snapshot champion e copia CSV per esecuzione,
+  - [x] Acquisire prima del training snapshot champion e copia CSV per esecuzione,
     fuori dal checkout, con SHA-256 fissato e mount in sola lettura.
   - [ ] Salvare dal training il test set effettivo con feature, target, indici,
     ordine e tipi; associare identità e checksum al run e al dataset iniziale.

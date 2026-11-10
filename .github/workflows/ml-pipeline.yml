@@ -29,6 +29,7 @@ jobs:
       GIT_REPOSITORY: ${{ github.workspace }}
       BUILD_RESULT: pipeline-build-${{ github.run_id }}-${{ github.run_attempt }}.json
       TRAINING_RESULT: training-${{ github.run_id }}-${{ github.run_attempt }}.json
+      TRAINING_SNAPSHOT: snapshot-${{ github.run_id }}-${{ github.run_attempt }}
       TRAINING_DATA_HOST_PATH: /opt/mlops-local-poc/training/data/input/SeoulBikeData.csv
       DOCKER_NETWORK: mlops-local-network
       MLFLOW_TRACKING_URI: http://mlflow:5000
@@ -59,6 +60,11 @@ jobs:
             --expected-commit "$GITHUB_SHA" \
             --summary "$GITHUB_STEP_SUMMARY"
 
+      - name: Prepare dataset and champion snapshot
+        run: |
+          bash "$GIT_REPOSITORY/ci-cd/scripts/prepare-training.sh" \
+            "$TRAINING_DATA_HOST_PATH" "$RUNNER_TEMP/$TRAINING_SNAPSHOT"
+
       - name: Train without model registration
         id: training
         run: |
@@ -67,6 +73,8 @@ jobs:
           python3 "$GIT_REPOSITORY/training/scripts/run_training.py" \
             --skip-registration \
             --evaluate-champion \
+            --training-data "$RUNNER_TEMP/$TRAINING_SNAPSHOT/SeoulBikeData.csv" \
+            --input-snapshot "$RUNNER_TEMP/$TRAINING_SNAPSHOT/snapshot.json" \
             --result-json "$RUNNER_TEMP/$TRAINING_RESULT" \
             --n-estimators 100 \
             --max-depth 10

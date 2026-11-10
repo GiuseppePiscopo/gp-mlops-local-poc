@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
+from common.training_snapshot import DATASET_FILENAME, SNAPSHOT_FILENAME, prepare_snapshot
 from random_forest import train
 
 import mlflow
@@ -50,6 +51,7 @@ class EvaluationIntegrationTests(unittest.TestCase):
                     skip_registration=False,
                     result_json=root / "baseline.json",
                     evaluate_champion=False,
+                    input_snapshot=None,
                     fail_for_alert_test=False,
                 )
 
@@ -58,6 +60,11 @@ class EvaluationIntegrationTests(unittest.TestCase):
                     self.assertEqual(forest.call_args.kwargs["n_jobs"], -1)
                     client = mlflow.MlflowClient()
                     client.set_registered_model_alias("isolated-model", "champion", "1")
+                    snapshot_directory = root / "snapshot"
+                    snapshot_directory.mkdir()
+                    prepare_snapshot(client, "isolated-model", path, snapshot_directory, "a" * 40)
+                    args.training_data = str(snapshot_directory / DATASET_FILENAME)
+                    args.input_snapshot = snapshot_directory / SNAPSHOT_FILENAME
                     args.skip_registration = True
                     args.evaluate_champion = True
                     args.result_json = root / "candidate.json"
@@ -68,7 +75,10 @@ class EvaluationIntegrationTests(unittest.TestCase):
                         path.write_text("changed CSV after training")
                         return model
 
-                    with patch.object(train, "train_model", side_effect=mutate_after_training):
+                    with (
+                        patch.object(train, "train_model", side_effect=mutate_after_training),
+                        patch.object(train, "snapshot_champion", side_effect=AssertionError("Alias reread")),
+                    ):
                         train.main(args)
                     result = json.loads(args.result_json.read_text())
                     report = result["evaluation"]
@@ -79,7 +89,12 @@ class EvaluationIntegrationTests(unittest.TestCase):
                     self.assertEqual(client.get_run(result["run_id"]).info.status, "FINISHED")
                     self.assertEqual(
                         {a.path for a in client.list_artifacts(result["run_id"], "evaluation")},
-                        {"evaluation/champion-snapshot.json", "evaluation/test-set.json", "evaluation/report.json"},
+                        {
+                            "evaluation/champion-snapshot.json",
+                            "evaluation/test-set.json",
+                            "evaluation/report.json",
+                            "evaluation/input-snapshot.json",
+                        },
                     )
 
                     path.write_bytes(original_bytes)
