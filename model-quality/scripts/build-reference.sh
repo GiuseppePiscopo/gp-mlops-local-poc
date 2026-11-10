@@ -13,6 +13,7 @@ ALIAS="${ALIAS:-champion}"
 DATASET_FILE="${DATASET_FILE:-/opt/mlops-local-poc/training/data/input/SeoulBikeData.csv}"
 MLFLOW_ENV_FILE="${MLFLOW_ENV_FILE:-/opt/mlops-local-poc/mlflow/.env}"
 OUTPUT_DIR="${OUTPUT_DIR:-/opt/mlops-local-poc/model-quality/reference}"
+MLSERVER_IMAGE="${MLSERVER_IMAGE:?Impostare MLSERVER_IMAGE con il tag MLServer presente in Docker.}"
 
 SEAWEEDFS_CONTAINER_NAME="${SEAWEEDFS_CONTAINER_NAME:-mlops-seaweedfs}"
 SEAWEEDFS_DOCKER_NETWORK="${SEAWEEDFS_DOCKER_NETWORK:-mlops-local-network}"
@@ -56,7 +57,7 @@ docker run --rm \
   -v "${COMPONENT_DIR}/scripts:/scripts:ro" \
   -v "${DATASET_FILE}:/data/input.csv:ro" \
   -v "${OUTPUT_DIR}:/output" \
-  gp-mof-capstone-mlserver:dev \
+  "${MLSERVER_IMAGE}" \
   python3 /scripts/build-reference.py \
     --model "${MODEL}" \
     --alias "${ALIAS}" \

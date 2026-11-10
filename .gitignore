@@ -62,6 +62,7 @@ venv/
 
 # Local output data
 outputs/
+/serving/runtime/
 
 # MLflow runs data
 mlruns/

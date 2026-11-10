@@ -23,6 +23,8 @@ Il test Iris nel namespace `mlops-iris-inference` non viene modificato.
 - componente `deployment/` già operativo, con manifest e lock di provenance
   prodotti dalla fase precedente;
 - repository completo delle directory `serving/` e `deployment/`.
+- Git e `python3` >= 3.11 in WSL; repository sorgente pulito, completo di
+  `ci-cd/scripts/prepare_image.py`.
 
 Tutti i comandi si eseguono in un terminale **Bash in WSL**. Gli esempi assumono `champion` risolto alla Version 1; con un'altra versione usare manifest e lock corrispondenti.
 
@@ -49,7 +51,7 @@ find /opt/mlops-local-poc/serving -maxdepth 2 -type f | sort
 
 Devono essere presenti almeno `Dockerfile`, `requirements.txt`,
 `config/storage-secret.env`, i manifest `00`, `10` e `20` e gli script
-`build-image.sh` e `apply-storage-secret.sh`.
+`build-image.sh`, `render-runtime.py` e `apply-storage-secret.sh`.
 
 ## Verificare stack e contesto Kubernetes
 
@@ -72,29 +74,53 @@ il nodo deve essere `Ready` e le due CRD presenti.
 
 ## Costruire e caricare l'immagine MLServer
 
+Impostare il percorso del repository Git Windows e il tag. Il repository
+deve essere pulito, senza modifiche staged, unstaged o file non tracciati.
+Mantenere le variabili esportate per i comandi successivi.
+
+```bash
+export GIT_REPOSITORY="/mnt/c/<percorso-repository>/mlops-local-poc"
+export IMAGE_TAG="gp-mof-capstone-mlserver:git-$(git -C "$GIT_REPOSITORY" rev-parse HEAD)"
+```
+
 Costruire l'immagine del runtime:
 
 ```bash
 cd /opt/mlops-local-poc/serving
 ./scripts/build-image.sh
 
-docker image inspect gp-mof-capstone-mlserver:dev \
+docker image inspect "$IMAGE_TAG" \
   --format 'image_id={{.Id}} command={{json .Config.Cmd}}'
 ```
 
 Il comando di avvio deve essere `["mlserver","start","/mnt/models"]`.
 
+Ripetere `./scripts/build-image.sh`: controllare `reused: true` e lo stesso
+`image_id`. Per ricostruire lo stesso commit, usare un nuovo suffisso
+`-rebuild1` in `IMAGE_TAG`, sia in build sia nel rendering del runtime.
+
 Caricare l'immagine nel nodo KinD:
 
 ```bash
-kind load docker-image gp-mof-capstone-mlserver:dev --name mlops-test
+kind load docker-image "$IMAGE_TAG" --name mlops-test
 
 docker exec mlops-test-control-plane crictl images \
   | grep gp-mof-capstone-mlserver
 ```
 
-L'immagine deve comparire nel nodo con tag `dev`. Ripetere il caricamento dopo
+L'immagine deve comparire nel nodo con il tag `git-<SHA completo>`. Ripetere il caricamento dopo
 una nuova build o dopo la ricreazione del cluster.
+
+Generare il manifest del runtime:
+
+```bash
+./scripts/render-runtime.py
+cat runtime/20-serving-runtime.yaml
+```
+
+Controllare che `image` corrisponda a `IMAGE_TAG`. Non applicare direttamente
+`manifests/20-serving-runtime.yaml`: è il template. Non cambiare commit tra
+build e rendering.
 
 ## Creare il namespace
 
@@ -154,8 +180,8 @@ cd /opt/mlops-local-poc/serving
 kubectl --context kind-mlops-test apply -f manifests/10-service-account.yaml
 
 kubectl --context kind-mlops-test apply --dry-run=server \
-  -f manifests/20-serving-runtime.yaml
-kubectl --context kind-mlops-test apply -f manifests/20-serving-runtime.yaml
+  -f runtime/20-serving-runtime.yaml
+kubectl --context kind-mlops-test apply -f runtime/20-serving-runtime.yaml
 
 kubectl --context kind-mlops-test -n gp-mof-capstone-serving \
   get serviceaccount gp-mof-capstone-model-storage-reader
@@ -164,6 +190,16 @@ kubectl --context kind-mlops-test -n gp-mof-capstone-serving \
 ```
 
 I due `get` finali devono mostrare le risorse create, senza errori.
+
+Verificare il riferimento immagine:
+
+```bash
+kubectl --context kind-mlops-test -n gp-mof-capstone-serving \
+  get servingruntime gp-mof-capstone-mlserver \
+  -o jsonpath='{.spec.containers[0].image}{"\n"}'
+```
+
+Atteso: il valore di `IMAGE_TAG`.
 
 ## Verificare il manifest di deployment
 
@@ -233,6 +269,17 @@ kubectl --context kind-mlops-test -n gp-mof-capstone-serving \
 Atteso: `rollout status` termina con `successfully rolled out`, `wait` con
 `condition met`; poi Deployment `1/1`, pod `Running` e `1/1`,
 `InferenceService` `READY=True`. In caso di timeout vedere la diagnostica.
+
+Verificare immagine e image ID del container predictor:
+
+```bash
+kubectl --context kind-mlops-test -n gp-mof-capstone-serving \
+  get pods -l app=isvc.gp-mof-capstone-model-predictor \
+  -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{range .status.containerStatuses[?(@.name=="kserve-container")]}{.image}{"\n"}{.imageID}{"\n"}{end}{end}'
+```
+
+Il riferimento immagine deve corrispondere a `IMAGE_TAG`. Confrontare
+l'identità con quella caricata nel nodo.
 
 ## Verificare il modello e l'inferenza V2
 
@@ -389,7 +436,7 @@ kubectl --context kind-mlops-test -n gp-mof-capstone-serving \
 
 - Namespace `gp-mof-capstone-serving`, Secret S3 e ServiceAccount presenti.
 - Nodo KinD collegato a `mlops-local-network`.
-- Immagine `gp-mof-capstone-mlserver:dev` caricata nel cluster e runtime
+- Immagine `gp-mof-capstone-mlserver:git-<SHA>` caricata nel cluster e runtime
   namespaced `gp-mof-capstone-mlserver` applicato.
 - Manifest e lock coerenti con la versione risolta dal Model Registry.
 - Predictor `1/1` e `InferenceService` `READY=True`.

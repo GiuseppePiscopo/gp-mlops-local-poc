@@ -174,6 +174,10 @@ Creare lo snapshot di reference per la versione risolta dall'alias `champion`
 ricalcola le predizioni con la versione registrata):
 
 ```bash
+export MLSERVER_IMAGE="$(kubectl --context kind-mlops-test -n gp-mof-capstone-serving \
+  get servingruntime gp-mof-capstone-mlserver \
+  -o jsonpath='{.spec.containers[0].image}')"
+
 bash /opt/mlops-local-poc/model-quality/scripts/build-reference.sh
 ```
 

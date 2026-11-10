@@ -15,7 +15,7 @@ spec:
     - v2
   containers:
     - name: kserve-container
-      image: gp-mof-capstone-mlserver:dev
+      image: ${MLSERVER_IMAGE}
       imagePullPolicy: IfNotPresent
       env:
         - name: MLSERVER_MODEL_IMPLEMENTATION

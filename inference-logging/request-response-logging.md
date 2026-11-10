@@ -50,10 +50,18 @@ Devono essere presenti almeno:
 
 ## Ricostruire l'immagine e avviare il rollout
 
+Impostare repository e tag dopo aver committato le modifiche:
+
+```bash
+export GIT_REPOSITORY="$REPO"
+export IMAGE_TAG="gp-mof-capstone-mlserver:git-$(git -C "$GIT_REPOSITORY" rev-parse HEAD)"
+```
+
 ```bash
 cd /opt/mlops-local-poc/serving && ./scripts/build-image.sh
 
-kind load docker-image gp-mof-capstone-mlserver:dev --name mlops-test
+kind load docker-image "$IMAGE_TAG" --name mlops-test
+./scripts/render-runtime.py
 ```
 
 Applicare il `ServingRuntime`, che dichiara il runtime custom e le variabili
@@ -61,7 +69,7 @@ di logging (`MODEL_NAME`, `MODEL_VERSION`, `LOG_SAMPLE_RATE`):
 
 ```bash
 kubectl --context kind-mlops-test apply \
-  -f /opt/mlops-local-poc/serving/manifests/20-serving-runtime.yaml
+  -f /opt/mlops-local-poc/serving/runtime/20-serving-runtime.yaml
 
 kubectl --context kind-mlops-test -n gp-mof-capstone-serving \
   rollout status deployment/gp-mof-capstone-model-predictor --timeout=180s
@@ -191,18 +199,22 @@ Terminati i controlli, interrompere i port-forward con `Ctrl+C`.
 
 ## Sequenza operativa ordinaria
 
-Dopo una modifica ai file nel repository Windows:
+Dopo aver committato una modifica ai file nel repository Windows:
 
 ```bash
+export GIT_REPOSITORY="$REPO"
+export IMAGE_TAG="gp-mof-capstone-mlserver:git-$(git -C "$GIT_REPOSITORY" rev-parse HEAD)"
+
 bash "${REPO}/serving/scripts/sync-to-wsl.sh"
 bash "${REPO}/inference-logging/scripts/sync-to-wsl.sh"
 
 cd /opt/mlops-local-poc/serving && ./scripts/build-image.sh
 
-kind load docker-image gp-mof-capstone-mlserver:dev --name mlops-test
+kind load docker-image "$IMAGE_TAG" --name mlops-test
+./scripts/render-runtime.py
 
 kubectl --context kind-mlops-test apply \
-  -f /opt/mlops-local-poc/serving/manifests/20-serving-runtime.yaml
+  -f /opt/mlops-local-poc/serving/runtime/20-serving-runtime.yaml
 ```
 
 Dopo il rollout, generare traffico e riverificare con `send-test-traffic.sh`
@@ -212,7 +224,7 @@ e `verify-logs.sh`.
 
 Al termine della procedura risultano verificati:
 
-- immagine `gp-mof-capstone-mlserver:dev` con runtime custom ricostruita e
+- immagine `gp-mof-capstone-mlserver:git-<SHA>` con runtime custom costruita e
   caricata nel nodo KinD;
 - predictor `1/1` con implementazione `logging_runtime.LoggingMLflowRuntime`;
 - traffico di prova via gateway con esito `200`;

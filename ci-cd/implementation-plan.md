@@ -42,10 +42,10 @@ durante l'implementazione in `github-actions-self-hosted-wsl.md`.
   resolver aggiornato e verificare manifest/lock rispetto alla versione
   attesa, senza applicarli al cluster. La prova crea un run e una versione:
   registrare gli identificativi e l'esito, senza dichiararla priva di effetti.
-- [ ] Integrare il build MLServer con lo script comune e rendere configurabile
+- [x] Integrare il build MLServer con lo script comune e rendere configurabile
   l'immagine del ServingRuntime mantenendo l'uso manuale. Adottare insieme
   build e consumer per non interrompere la procedura serving corrente.
-- [ ] Aggiornare la procedura serving: build, kind load e verifica del tag SHA.
+- [x] Aggiornare la procedura serving: build, kind load e verifica del tag SHA.
 - [ ] Provare una volta nell'ambiente WSL/Docker/KinD esistente e verificare
   l'immagine effettivamente avviata dal predictor.
 - [ ] Preservare il cluster e il servizio; niente ricreazioni o modifiche
