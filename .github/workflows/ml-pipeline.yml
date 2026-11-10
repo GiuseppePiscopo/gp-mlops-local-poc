@@ -1,0 +1,62 @@
+name: ML pipeline
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  train-and-evaluate:
+    name: Prepare training
+    if: >-
+      github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.head.repo.full_name == github.repository &&
+       github.event.pull_request.user.login == 'GiuseppePiscopo')
+    runs-on: [self-hosted, Linux, X64, mlops-local]
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    env:
+      GIT_REPOSITORY: ${{ github.workspace }}
+      BUILD_RESULT: pipeline-build-${{ github.run_id }}-${{ github.run_attempt }}.json
+    steps:
+      - name: Checkout with LFS
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          lfs: true
+          persist-credentials: false
+
+      - name: Verify Linux checkout and commit
+        run: |
+          bash "$GIT_REPOSITORY/ci-cd/scripts/verify-checkout.sh" \
+            "$GIT_REPOSITORY" "$GITHUB_SHA"
+
+      - name: Build training image from checkout
+        run: |
+          set -euo pipefail
+          unset IMAGE_TAG
+          bash "$GIT_REPOSITORY/training/scripts/build-image.sh" > "$RUNNER_TEMP/$BUILD_RESULT"
+
+      - name: Verify image provenance
+        run: |
+          python3 "$GIT_REPOSITORY/ci-cd/scripts/verify-image-provenance.py" \
+            --build-result "$RUNNER_TEMP/$BUILD_RESULT" \
+            --expected-commit "$GITHUB_SHA" \
+            --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Report pipeline scope
+        run: |
+          printf '%s\n' \
+            '## Pipeline scope' \
+            '' \
+            'Checkout and image build only. Training, evaluation, model registration and deployment are not implemented yet.' \
+            >> "$GITHUB_STEP_SUMMARY"

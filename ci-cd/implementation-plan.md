@@ -68,7 +68,7 @@ le evidenze sono in [design.md](design.md); la procedura operativa in costruzion
 
 ## 4. Implementare workflow e job
 
-- [ ] Creare `ml-pipeline.yml` con trigger PR, push su main e avvio manuale;
+- [x] Creare `ml-pipeline.yml` con trigger PR, push su main e avvio manuale;
   PR senza deploy. Mantenere separato il workflow diagnostico `verify-runner.yml`.
   Applicare il perimetro [PR fidate e permessi](design.md#pr-fidate-e-permessi).
 - [ ] Implementare training dal checkout con immagine per commit e dati runtime,
