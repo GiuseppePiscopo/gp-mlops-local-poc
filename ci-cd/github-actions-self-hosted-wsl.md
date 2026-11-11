@@ -3,7 +3,8 @@
 Questa procedura configura un runner GitHub Actions nel laboratorio WSL con
 Docker e KinD, verifica checkout e build delle immagini ed esegue training
 ed evaluation del modello `gp-mof-capstone-model` con MLflow, quindi applica
-la versione approvata al cluster KinD.
+la versione approvata al cluster KinD, verifica l'inferenza e la promuove
+a `champion`.
 
 ## Prerequisiti
 
@@ -259,7 +260,8 @@ Aprire in MLflow il run indicato nel Summary e verificare:
 - tag `evaluation.passed` uguale a `true`;
 - RMSE del candidato minore o uguale a quello del champion nel report.
 
-Aprire **Models > gp-mof-capstone-model** in MLflow e selezionare la versione
+Prima di approvare il deployment, aprire **Models > gp-mof-capstone-model**
+in MLflow e selezionare la versione
 indicata nella sezione **Model registration** del Summary. Verificare:
 
 - alias `candidate` assegnato alla nuova versione;
@@ -288,6 +290,9 @@ Nel dettaglio dell'esecuzione GitHub, verificare che **Train and evaluate**
 sia completato con successo e **Deploy** sia in attesa di
 review per l'environment `production`.
 
+Non occorre avviare un port-forward al servizio di inferenza per questa
+verifica. Durante il job non eseguire deploy o modifiche manuali a champion.
+
 Aprire **Review deployments**, selezionare `production` e premere
 **Approve and deploy**.
 
@@ -304,8 +309,19 @@ Nella sezione **Deployment apply**, verificare:
 - contesto `kind-mlops-test`;
 - immagine runtime `gp-mof-capstone-mlserver:git-<commit>` con il commit della
   sezione **Training result**, e relativo image ID;
-- indicazione dei manifest applicati, readiness e inferenza non ancora
-  verificate, champion invariato.
+- indicazione dei manifest applicati.
+
+Nella sezione **Deployment verification**, verificare:
+
+- modello e versione uguali alla sezione **Model registration**;
+- nome del pod predictor verificato e relativo **Running image ID**;
+- numero di righe della prova e altrettante predizioni numeriche finite;
+- **Champion** uguale alla versione distribuita, con la precedente versione
+  indicata tra parentesi (`absent` nel bootstrap);
+- indicazione del completamento di readiness, inferenza e promozione.
+
+Non confrontare direttamente **Running image ID** con l'image ID Docker
+di **Deployment apply**.
 
 In un secondo terminale WSL, controllare la risorsa applicata:
 
@@ -313,12 +329,31 @@ In un secondo terminale WSL, controllare la risorsa applicata:
 kubectl --context kind-mlops-test -n gp-mof-capstone-serving \
   get inferenceservice gp-mof-capstone-model \
   -o jsonpath='{.metadata.annotations.mlops\.gp-mof\.dev/resolved-version}{"\n"}{.metadata.annotations.mlops\.gp-mof\.dev/source-run-id}{"\n"}{.spec.predictor.model.storageUri}{"\n"}{.spec.predictor.model.env}{"\n"}'
+```
 
+Verificare le quattro righe stampate, nell'ordine:
+
+1. Versione uguale a quella della sezione **Model registration** del Summary.
+2. Run sorgente uguale a quello della sezione **Training result**.
+3. URI S3 uguale a **Storage URI** nella sezione **Deployment apply**.
+4. Elenco delle variabili d'ambiente con `MODEL_NAME` uguale a
+   `gp-mof-capstone-model` e `MODEL_VERSION` uguale alla versione della prima riga.
+
+Controllare l'immagine del runtime applicato:
+
+```bash
 kubectl --context kind-mlops-test -n gp-mof-capstone-serving \
   get servingruntime gp-mof-capstone-mlserver \
   -o jsonpath='{.spec.containers[0].image}{"\n"}'
 ```
 
-Verificare versione e run uguali al Summary, `storageUri` uguale allo
-**Storage URI** di **Deployment apply**, `MODEL_VERSION` uguale alla versione
-applicata e immagine del runtime uguale a **Runtime image**.
+Verificare che l'unica riga stampata sia uguale a **Runtime image** nella
+sezione **Deployment apply** del Summary.
+
+In MLflow, aprire **Models > gp-mof-capstone-model** e verificare che
+`champion` punti alla versione della sezione **Model registration**.
+Controllare anche che il deploy non abbia modificato `baseline` o `candidate`.
+
+Se il job fallisce, controllare il servizio con i comandi precedenti e
+l'alias `champion` in MLflow prima di riprovare. Non presumere un ripristino
+automatico.

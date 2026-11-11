@@ -189,7 +189,7 @@ class ApplyDeploymentTests(unittest.TestCase):
         )
         self.assertEqual(json.loads((self.output / "deployment-result.json").read_text()), result)
         self.assertIn(
-            "Readiness and inference are not checked yet; champion is unchanged.", self.args.summary.read_text()
+            "Readiness, inference and champion promotion follow in the verification step.", self.args.summary.read_text()
         )
         commands = [args for args, _ in self.calls]
         self.assertIn(

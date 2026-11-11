@@ -113,7 +113,7 @@ le evidenze sono in [design.md](design.md); la procedura operativa in costruzion
   Registry e bootstrap con champion comparso.
 - [x] Renderizzare la versione esatta, caricare runtime in KinD e applicare
   risorse/InferenceService.
-- [ ] Attendere readiness, provare inferenza e aggiornare champion solo al successo.
+- [x] Attendere readiness, provare inferenza e aggiornare champion solo al successo.
 - [ ] Conservare report, manifest, lock, riferimenti modello e immagini come
   output/artifact della stessa esecuzione, senza credenziali.
 

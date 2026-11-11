@@ -285,7 +285,7 @@ def record_application(
             f"- Storage URI: `{rendered.resolution['resolved_storage_uri']}`\n"
             f"- Runtime image: `{images['serving']['image']}`\n"
             f"- Runtime image ID: `{images['serving']['image_id']}`\n\n"
-            "Manifests applied. Readiness and inference are not checked yet; champion is unchanged.\n"
+            "Manifests applied. Readiness, inference and champion promotion follow in the verification step.\n"
         )
     return result
 

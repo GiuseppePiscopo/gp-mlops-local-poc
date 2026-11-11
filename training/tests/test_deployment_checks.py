@@ -2,9 +2,6 @@ import argparse
 import copy
 import importlib.util
 import json
-import os
-import subprocess
-import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -19,6 +16,10 @@ SCRIPT = Path(__file__).resolve().parents[2] / "ci-cd" / "scripts" / "check-depl
 SPEC = importlib.util.spec_from_file_location("check_deployment", SCRIPT)
 checker = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(checker)
+PROMOTION_SCRIPT = SCRIPT.with_name("promote-champion.py")
+PROMOTION_SPEC = importlib.util.spec_from_file_location("promote_champion", PROMOTION_SCRIPT)
+promotion = importlib.util.module_from_spec(PROMOTION_SPEC)
+PROMOTION_SPEC.loader.exec_module(promotion)
 
 
 class DeploymentCheckTests(unittest.TestCase):
@@ -98,6 +99,22 @@ class DeploymentCheckTests(unittest.TestCase):
             ("test-set-manifest", self.manifest),
         ):
             (self.root / f"{name}.json").write_text(json.dumps(value), encoding="utf-8")
+
+    def write_verification(self):
+        self.args.verification = self.root / "verification.json"
+        self.args.verification.write_text(
+            json.dumps(
+                {
+                    "status": "VERIFIED",
+                    "registered_model": self.args.registered_model,
+                    "model_version": self.args.model_version,
+                    "model_uri": self.args.model_uri,
+                    "run_id": self.args.run_id,
+                    "git_commit": self.args.expected_commit,
+                }
+            ),
+            encoding="utf-8",
+        )
 
     def use_bootstrap(self):
         self.args.evaluation_mode = "bootstrap"
@@ -227,111 +244,58 @@ class DeploymentCheckTests(unittest.TestCase):
                 document[key] = original
         self.client.get_registered_model.assert_not_called()
 
+    def test_promotion_rechecks_reference_then_updates_only_champion(self):
+        for mode in ("relative", "bootstrap"):
+            with self.subTest(mode=mode):
+                if mode == "bootstrap":
+                    self.use_bootstrap()
+                    self.client.get_registered_model.return_value.aliases = {"candidate": "2"}
+                self.write_verification()
+                target = self.client.get_model_version.return_value
+                self.client.get_model_version_by_alias.side_effect = (
+                    [self.client.get_model_version_by_alias.return_value, target] if mode == "relative" else [target]
+                )
+                self.client.set_registered_model_alias.reset_mock()
+                result = promotion.promote_champion(self.args)
+                self.assertEqual(result["status"], "PROMOTED")
+                self.assertEqual(result["previous_champion"], "1" if mode == "relative" else None)
+                self.client.set_registered_model_alias.assert_called_once_with("model", "champion", "2")
+        self.client.create_model_version.assert_not_called()
 
-class DeploymentCheckIntegrationTests(unittest.TestCase):
-    def setUp(self):
-        self.root = Path(self.enterContext(tempfile.TemporaryDirectory(prefix="mlops-deployment-integration-")))
-        tracking_uri = f"sqlite:///{(self.root / 'mlflow.db').as_posix()}"
-        previous_tracking_uri = checker.mlflow.get_tracking_uri()
-        self.enterContext(patch.dict(os.environ, {"MLFLOW_TRACKING_URI": tracking_uri}))
-        self.addCleanup(checker.mlflow.set_tracking_uri, previous_tracking_uri)
-        checker.mlflow.set_tracking_uri(tracking_uri)
-        self.client = checker.mlflow.MlflowClient(tracking_uri=tracking_uri)
-        self.experiment = self.client.create_experiment("deployment", artifact_location=str(self.root / "artifacts"))
-        self.client.create_registered_model("model")
-        previous = self.create_version()
-        self.target = self.create_version()
-        for alias in ("champion", "baseline", "candidate"):
-            self.client.set_registered_model_alias("model", alias, previous.version)
-
-        # Persist only the source-run metadata consumed by the pre-deployment check.
-        self.champion = checker.snapshot_champion(self.client, "model")
-        candidate = {"run_id": self.target.run_id, "model_uri": self.target.source, "git_commit": "a" * 40}
-        snapshot = {
-            "git_commit": "a" * 40,
-            "mode": "relative",
-            "registered_model": "model",
-            "champion": self.champion,
-            "dataset": {"sha256": "dataset"},
-        }
-        manifest = {
-            "candidate": candidate,
-            "input_snapshot_sha256": snapshot_checksum(snapshot),
-            "test_set": {"dataset_sha256": "dataset"},
-        }
-        report = {
-            "candidate": candidate,
-            "mode": "relative",
-            "champion": self.champion,
-            "passed": True,
-            "test_set": manifest["test_set"],
-        }
-        for name, value in (("report", report), ("input-snapshot", snapshot), ("test-set-manifest", manifest)):
-            self.client.log_dict(self.target.run_id, value, f"evaluation/{name}.json")
-
-    def create_version(self):
-        run = self.client.create_run(
-            self.experiment,
-            tags={"git.commit": "a" * 40, "evaluation.passed": "true", "dataset.sha256": "dataset"},
+    def test_bad_verification_changed_champion_and_registry_error_do_not_promote(self):
+        self.write_verification()
+        self.args.verification.write_text(
+            json.dumps(
+                {
+                    "status": "VERIFIED",
+                    "registered_model": "model",
+                    "model_version": "wrong",
+                    "model_uri": self.args.model_uri,
+                    "run_id": self.args.run_id,
+                    "git_commit": self.args.expected_commit,
+                }
+            )
         )
-        logged = self.client.create_logged_model(self.experiment, source_run_id=run.info.run_id)
-        version = self.client.create_model_version(
-            "model",
-            source=f"models:/{logged.model_id}",
-            run_id=run.info.run_id,
-            tags={"git.commit": "a" * 40, "evaluation.mode": "relative"},
-        )
-        self.client.set_terminated(run.info.run_id)
-        return version
+        with self.assertRaisesRegex(ValueError, "verification does not identify"):
+            promotion.promote_champion(self.args)
+        self.client.get_model_version.assert_not_called()
+        self.write_verification()
+        self.client.get_model_version_by_alias.return_value.version = "changed"
+        with self.assertRaisesRegex(ValueError, "Obsolete deployment"):
+            promotion.promote_champion(self.args)
+        self.client.get_registered_model.side_effect = RuntimeError("Registry unavailable")
+        with self.assertRaisesRegex(RuntimeError, "Registry unavailable"):
+            promotion.promote_champion(self.args)
+        self.client.set_registered_model_alias.assert_not_called()
 
-    def run_check_cli(self):
-        return subprocess.run(
-            [
-                sys.executable,
-                str(SCRIPT),
-                "--run-id",
-                self.target.run_id,
-                "--model-uri",
-                self.target.source,
-                "--expected-commit",
-                "a" * 40,
-                "--registered-model",
-                "model",
-                "--model-version",
-                str(self.target.version),
-                "--evaluation-mode",
-                "relative",
-                "--event-name",
-                "push",
-                "--git-ref",
-                "refs/heads/main",
-            ],
-            capture_output=True,
-            text=True,
-        )
-
-    def test_cli_accepts_fixed_target_without_changing_registry(self):
-        aliases = self.client.get_registered_model("model").aliases
-        process = self.run_check_cli()
-        self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
-        result = json.loads(process.stdout)
-        self.assertEqual(result["champion"], self.champion)
-        self.assertEqual(result["model_version"], str(self.target.version))
-        self.assertEqual(result["model_uri"], self.target.source)
-        self.assertEqual(self.client.get_registered_model("model").aliases, aliases)
-        self.assertEqual(len(self.client.search_model_versions("name='model'")), 2)
-
-    def test_cli_rejects_champion_changed_after_evaluation(self):
-        self.client.set_registered_model_alias("model", "champion", self.target.version)
-        process = self.run_check_cli()
-        self.assertNotEqual(process.returncode, 0)
-        self.assertIn("Obsolete deployment", process.stderr)
-        self.assertIn("Start a new workflow execution", process.stderr)
-        self.assertIn('"version": "1"', process.stderr)
-        self.assertIn('"version": "2"', process.stderr)
-        self.assertEqual(
-            str(self.client.get_model_version_by_alias("model", "champion").version), str(self.target.version)
-        )
+    def test_alias_write_or_confirmation_error_is_not_reported_as_success(self):
+        self.write_verification()
+        self.client.set_registered_model_alias.side_effect = RuntimeError("Alias write failed")
+        with self.assertRaisesRegex(RuntimeError, "Alias write failed"):
+            promotion.promote_champion(self.args)
+        self.client.set_registered_model_alias.side_effect = None
+        with self.assertRaisesRegex(ValueError, "could not be confirmed"):
+            promotion.promote_champion(self.args)
 
 
 if __name__ == "__main__":

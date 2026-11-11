@@ -165,7 +165,7 @@ jobs:
           printf '%s\n' \
             '## Pipeline scope' \
             '' \
-            'Training and evaluation completed. Registration runs only after a successful gate on main/manual runs. Production approval and deployment application are handled by the dependent job.' \
+            'Training and evaluation completed. Registration runs only after a successful gate on main/manual runs. Production approval, deployment verification and champion promotion are handled by the dependent job.' \
             >> "$GITHUB_STEP_SUMMARY"
 
       - name: Clean ephemeral test set
@@ -250,4 +250,21 @@ jobs:
             --cluster "$KIND_CLUSTER" \
             --context "$KUBERNETES_CONTEXT" \
             --network "$DOCKER_NETWORK" \
+            --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify deployed model and promote champion
+        run: |
+          python3 "$GIT_REPOSITORY/ci-cd/scripts/verify-deployment.py" \
+            --repository "$GIT_REPOSITORY" \
+            --deployment-result "$RUNNER_TEMP/$DEPLOYMENT_DIRECTORY/deployment-result.json" \
+            --registered-model "$REGISTERED_MODEL" \
+            --model-version "$MODEL_VERSION" \
+            --model-uri "$MODEL_URI" \
+            --run-id "$MODEL_RUN_ID" \
+            --expected-commit "$MODEL_COMMIT" \
+            --context "$KUBERNETES_CONTEXT" \
+            --network "$DOCKER_NETWORK" \
+            --evaluation-mode "$EVALUATION_MODE" \
+            --event-name "$GITHUB_EVENT_NAME" \
+            --git-ref "$GITHUB_REF" \
             --summary "$GITHUB_STEP_SUMMARY"

@@ -181,6 +181,26 @@ il percorso non orchestrato deve restare utilizzabile.
 - Gli output GitHub identificano il passaggio, non sono una barriera di
   sicurezza contro codice PR non fidato sul runner.
 
+### Verifica del servizio e promozione
+
+- La readiness deve riferirsi al nuovo rilascio, non a uno stato del servizio
+  precedente. Verificare identità del modello, storage e immagine effettivamente
+  avviata rispetto al target approvato.
+- Lo smoke test verifica il predictor con protocollo V2, senza dipendere da
+  port-forward gestiti manualmente; il routing Envoy è fuori dal perimetro.
+  Usare l'esempio salvato negli artifact del modello e richiedere una
+  predizione numerica finita per ogni riga, senza fissare valori di output
+  che cambiano al cambiare del modello.
+- Un cambio del pod o del container durante la prova invalida la verifica.
+  Prima di promuovere ripetere i controlli Registry sul target e sul champion
+  dello snapshot, mantenendo la sezione serializzata. Aggiornare solo
+  `champion` alla versione esatta verificata e confermare la lettura
+  dell'alias; non modificare `baseline` o `candidate`.
+- Errori di readiness o inferenza impediscono la promozione, senza rollback
+  automatico del servizio. Un errore di scrittura o conferma dell'alias può
+  lasciare champion già aggiornato: segnalare l'errore e richiedere verifica
+  dello stato, senza dichiarare un ripristino.
+
 ### Serializzazione e approvazioni fuori ordine
 
 - Il job deploy usa un gruppo GitHub Actions `concurrency` stabile per modello
