@@ -198,9 +198,13 @@ class BootstrapTests(unittest.TestCase):
                         self.assertEqual(client.search_registered_models(), [])
                         saved_report = Path(client.download_artifacts(result["run_id"], "evaluation/report.json"))
                         self.assertEqual(json.loads(saved_report.read_text()), report)
-                        self.assertNotIn(
-                            "evaluation/champion-snapshot.json",
+                        self.assertEqual(
                             {item.path for item in client.list_artifacts(result["run_id"], "evaluation")},
+                            {
+                                "evaluation/input-snapshot.json",
+                                "evaluation/test-set-manifest.json",
+                                "evaluation/report.json",
+                            },
                         )
                         summary = root / f"summary-{estimators}.md"
                         reporter = (

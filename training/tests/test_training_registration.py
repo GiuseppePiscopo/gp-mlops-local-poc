@@ -1,4 +1,5 @@
 import argparse
+import hashlib
 import importlib.util
 import json
 import sys
@@ -19,6 +20,24 @@ SPEC.loader.exec_module(launcher)
 class TrainingRegistrationTests(unittest.TestCase):
     def setUp(self):
         self.enterContext(patch.object(launcher, "print_run_summary"))
+
+    def test_dataset_tags_reuse_verified_snapshot_but_hash_manual_input(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "dataset.csv"
+            content = b"feature,target\n1,2\n3,4\n"
+            path.write_bytes(content)
+            identity = {"sha256": hashlib.sha256(content).hexdigest(), "size_bytes": len(content)}
+            with patch.object(train, "get_file_sha256", wraps=train.get_file_sha256) as checksum:
+                manual_tags = train.get_dataset_tags(str(path))
+            checksum.assert_called_once_with(path.resolve())
+            self.assertEqual(manual_tags["dataset.sha256"], identity["sha256"])
+            self.assertEqual(manual_tags["dataset.size_bytes"], str(len(content)))
+            with (
+                patch.object(train, "get_file_sha256", side_effect=AssertionError("CSV reread for checksum")),
+                patch.object(train.hashlib, "sha256", side_effect=AssertionError("Verified checksum recalculated")),
+            ):
+                snapshot_tags = train.get_dataset_tags(str(path), identity)
+            self.assertEqual(snapshot_tags, manual_tags)
 
     def test_training_registration_modes(self):
         for skip in (False, True):

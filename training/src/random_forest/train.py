@@ -84,7 +84,7 @@ def get_file_sha256(file_path: Path) -> str:
     return digest.hexdigest()
 
 
-def get_dataset_tags(training_data: str) -> dict[str, str]:
+def get_dataset_tags(training_data: str, verified_dataset: dict | None = None) -> dict[str, str]:
     dataset_path = Path(training_data).resolve()
 
     if not dataset_path.is_file():
@@ -92,18 +92,26 @@ def get_dataset_tags(training_data: str) -> dict[str, str]:
             f"This training workflow expects --training_data to reference one CSV file. Received: {dataset_path}"
         )
 
+    dataset_stat = dataset_path.stat()
     modified_at = datetime.fromtimestamp(
-        dataset_path.stat().st_mtime,
+        dataset_stat.st_mtime,
         tz=UTC,
     ).isoformat()
+
+    if verified_dataset is not None:
+        size_bytes = verified_dataset["size_bytes"]
+        sha256 = verified_dataset["sha256"]
+    else:
+        size_bytes = dataset_stat.st_size
+        sha256 = get_file_sha256(dataset_path)
 
     return {
         "dataset.name": "gp-mof-capstone-data",
         "dataset.filename": dataset_path.name,
         "dataset.path": str(dataset_path),
-        "dataset.size_bytes": str(dataset_path.stat().st_size),
+        "dataset.size_bytes": str(size_bytes),
         "dataset.last_modified_utc": modified_at,
-        "dataset.sha256": get_file_sha256(dataset_path),
+        "dataset.sha256": sha256,
     }
 
 
@@ -184,15 +192,12 @@ def main(args: argparse.Namespace) -> None:
 
     with mlflow.start_run() as run:
         mlflow.set_tags(get_provenance_tags())
-        dataset_tags = get_dataset_tags(args.training_data)
-        if dataset_bytes is not None:
-            dataset_tags["dataset.sha256"] = hashlib.sha256(dataset_bytes).hexdigest()
-            dataset_tags["dataset.size_bytes"] = str(len(dataset_bytes))
+        dataset_tags = get_dataset_tags(
+            args.training_data, input_snapshot["dataset"] if input_snapshot is not None else None
+        )
         mlflow.set_tags(dataset_tags)
         if input_snapshot is not None:
             mlflow.log_dict(input_snapshot, "evaluation/input-snapshot.json")
-            if input_snapshot["champion"] is not None:
-                mlflow.log_dict(input_snapshot["champion"], "evaluation/champion-snapshot.json")
 
         mlflow.log_params(
             {

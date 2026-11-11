@@ -141,11 +141,17 @@ class EvaluationIntegrationTests(unittest.TestCase):
             self.dataset.write_text("changed CSV after training")
             return model
 
-        with patch.object(train, "train_model", side_effect=mutate_after_training):
+        with (
+            patch.object(train, "train_model", side_effect=mutate_after_training),
+            patch.object(train, "get_file_sha256", side_effect=AssertionError("Verified CSV checksum recalculated")),
+        ):
             train.main(self.args)
         result = json.loads(self.args.result_json.read_text())
         self.assertNotIn("evaluation", result)
-        self.assertEqual(self.client.get_run(result["run_id"]).info.status, "FINISHED")
+        run = self.client.get_run(result["run_id"])
+        self.assertEqual(run.info.status, "FINISHED")
+        self.assertEqual(run.data.tags["dataset.sha256"], hashlib.sha256(self.original_bytes).hexdigest())
+        self.assertEqual(run.data.tags["dataset.size_bytes"], str(len(self.original_bytes)))
         self.dataset.unlink()
         Path(self.args.training_data).unlink()
         report_path = self.root / "report.json"
@@ -166,7 +172,6 @@ class EvaluationIntegrationTests(unittest.TestCase):
         self.assertEqual(
             {item.path for item in self.client.list_artifacts(result["run_id"], "evaluation")},
             {
-                "evaluation/champion-snapshot.json",
                 "evaluation/report.json",
                 "evaluation/input-snapshot.json",
                 "evaluation/test-set-manifest.json",
