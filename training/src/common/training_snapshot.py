@@ -13,14 +13,18 @@ DATASET_FILENAME = "SeoulBikeData.csv"
 SNAPSHOT_FILENAME = "snapshot.json"
 
 
-def require_champion_absent(client: MlflowClient, registered_model: str) -> None:
+def champion_exists(client: MlflowClient, registered_model: str) -> bool:
     try:
         model = client.get_registered_model(registered_model)
     except MlflowException as error:
         if error.error_code != "RESOURCE_DOES_NOT_EXIST":
             raise
-        return
-    if "champion" in model.aliases:
+        return False
+    return "champion" in model.aliases
+
+
+def require_champion_absent(client: MlflowClient, registered_model: str) -> None:
+    if champion_exists(client, registered_model):
         raise ValueError("Bootstrap requires an absent champion; use the ordinary relative workflow.")
 
 

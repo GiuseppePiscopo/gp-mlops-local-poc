@@ -106,7 +106,7 @@ le evidenze sono in [design.md](design.md); la procedura operativa in costruzion
 - [x] Aggiungere il job deploy dipendente da training/evaluation e collegato
   all'environment production, escluso dalle PR e dai gate falliti.
   Implementata la sola approval con riepilogo del target; nessun rilascio.
-- [ ] Prima di abilitare modifiche al servizio, implementare concurrency e
+- [x] Prima di abilitare modifiche al servizio, implementare concurrency e
   controllo champion post-approval secondo
   [Serializzazione e approvazioni fuori ordine](design.md#serializzazione-e-approvazioni-fuori-ordine).
   Verificare con test isolati champion invariato, cambiato, assente, errori

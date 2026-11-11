@@ -23,6 +23,7 @@ class EvaluationIntegrationTests(unittest.TestCase):
     def setUp(self):
         self.root = Path(self.enterContext(tempfile.TemporaryDirectory(prefix="mlops-gate-integration-")))
         tracking = f"sqlite:///{self.root / 'mlflow.db'}"
+        previous_tracking_uri = mlflow.get_tracking_uri()
         self.enterContext(
             patch.dict(
                 os.environ,
@@ -33,7 +34,7 @@ class EvaluationIntegrationTests(unittest.TestCase):
                 },
             )
         )
-        self.addCleanup(mlflow.set_tracking_uri, mlflow.get_tracking_uri())
+        self.addCleanup(mlflow.set_tracking_uri, previous_tracking_uri)
         mlflow.set_tracking_uri(tracking)
         mlflow.create_experiment("isolated-gate", artifact_location=str(self.root / "artifacts"))
         self.dataset = self.root / "data.csv"
@@ -133,6 +134,36 @@ class EvaluationIntegrationTests(unittest.TestCase):
         self.assertEqual(len(self.client.search_model_versions("name='isolated-model'")), 1)
         self.assertEqual(str(self.client.get_model_version_by_alias("isolated-model", "champion").version), "1")
 
+    def run_registration_cli(self, report_path):
+        receipt_path = self.root / "registration.json"
+        process = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "registration.register_candidate",
+                "--training-result",
+                str(self.args.result_json),
+                "--input-snapshot",
+                str(self.args.input_snapshot),
+                "--evaluation",
+                str(report_path),
+                "--registered-model",
+                "isolated-model",
+                "--expected-commit",
+                "a" * 40,
+                "--event-name",
+                "push",
+                "--git-ref",
+                "refs/heads/main",
+                "--result",
+                str(receipt_path),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
+        return json.loads(receipt_path.read_text())
+
     def test_equal_candidate_uses_fixed_snapshot_without_csv_or_preprocessing(self):
         train_model = train.train_model
 
@@ -186,11 +217,20 @@ class EvaluationIntegrationTests(unittest.TestCase):
         self.assertEqual(len(features), 20)
         self.assertEqual(features.index.tolist(), report["test_set"]["test_row_indices"])
         self.assertEqual(len(target), 20)
-        cli_report = self.root / "cli-report.json"
-        process = self.run_evaluation_cli(cli_report)
+        self.assert_registry_unchanged()
+
+    def test_passed_evaluation_cli_preserves_report_and_export_without_registration(self):
+        train.main(self.args)
+        result = json.loads(self.args.result_json.read_text())
+        report_path = self.root / "report.json"
+        process = self.run_evaluation_cli(report_path)
         self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
-        self.assertEqual(json.loads(cli_report.read_text()), report)
-        self.assert_exported_results(cli_report, passed=True)
+        report = json.loads(report_path.read_text())
+        self.assertTrue(report["passed"])
+        saved_report = Path(self.client.download_artifacts(result["run_id"], "evaluation/report.json"))
+        self.assertEqual(json.loads(saved_report.read_text()), report)
+        self.assertEqual(self.client.get_run(result["run_id"]).info.status, "FINISHED")
+        self.assert_exported_results(report_path, passed=True)
         self.assert_registry_unchanged()
 
     def test_regression_rejects_cli_but_preserves_report_summary_and_outputs(self):
@@ -244,34 +284,7 @@ class EvaluationIntegrationTests(unittest.TestCase):
         evaluate.evaluate_training(
             self.args.result_json, self.args.input_snapshot, self.args.test_set_directory, report_path, "a" * 40
         )
-        receipt_path = self.root / "registration.json"
-        process = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "registration.register_candidate",
-                "--training-result",
-                str(self.args.result_json),
-                "--input-snapshot",
-                str(self.args.input_snapshot),
-                "--evaluation",
-                str(report_path),
-                "--registered-model",
-                "isolated-model",
-                "--expected-commit",
-                "a" * 40,
-                "--event-name",
-                "push",
-                "--git-ref",
-                "refs/heads/main",
-                "--result",
-                str(receipt_path),
-            ],
-            capture_output=True,
-            text=True,
-        )
-        self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
-        receipt = json.loads(receipt_path.read_text())
+        receipt = self.run_registration_cli(report_path)
         self.assertEqual(receipt["model_version"], "2")
         self.assertEqual(receipt["run_id"], candidate["run_id"])
         self.assertEqual(receipt["model_uri"], candidate["model_uri"])

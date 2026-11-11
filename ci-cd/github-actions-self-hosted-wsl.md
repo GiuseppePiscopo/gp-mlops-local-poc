@@ -188,8 +188,7 @@ selezionare `main` e avviare l'esecuzione.
 
 ### Verificare l'esecuzione su GitHub
 
-Aprire l'esecuzione e verificare che il job `verify-checkout` e tutti i suoi
-step siano completati con successo.
+Aprire l'esecuzione e verificare il successo del job **Verify runner**.
 
 Nel **Summary**, controllare la sezione **Linux checkout and image**:
 
@@ -202,7 +201,7 @@ Nel **Summary**, controllare la sezione **Linux checkout and image**:
 
 ### Verificare il checkout in WSL
 
-Cliccare sul job `verify-checkout` per aprire il dettaglio coi log, aprire lo step
+Cliccare sul job **Verify runner** per aprire il dettaglio coi log, aprire lo step
 **Verify Linux checkout and commit**, copiare il percorso stampato dopo `Checkout:`.
 In un secondo terminale WSL, impostarlo ed eseguire:
 
@@ -241,8 +240,7 @@ Con il runner attivo, aprire **Actions > ML pipeline > Run workflow** e
 selezionare `main`. Lasciare **Initial model only...** non selezionato e
 avviare l'esecuzione.
 
-Aprire l'esecuzione e verificare che il job **Train and evaluate** e tutti
-i suoi step siano completati con successo.
+Aprire l'esecuzione e verificare il successo del job **Train and evaluate**.
 
 Nel **Summary**, verificare:
 
@@ -286,15 +284,16 @@ Atteso: l'archivio contiene soltanto i quattro JSON, senza `test-data.json`.
 ## Approvare l'esecuzione production
 
 Nel dettaglio dell'esecuzione GitHub, verificare che **Train and evaluate**
-sia completato con successo e **Deploy (approval only)** sia in attesa di
+sia completato con successo e **Deploy (checks only)** sia in attesa di
 review per l'environment `production`.
 
 Aprire **Review deployments**, selezionare `production` e premere
 **Approve and deploy**.
 
-Verificare il successo del job **Deploy (approval only)** e, nel Summary,
+Verificare il successo del job **Deploy (checks only)** e, nel Summary,
 la sezione **Production approval**:
 
 - modello e versione uguali alla sezione **Model registration**;
 - run sorgente, URI del modello e commit uguali alla sezione **Training result**;
+- indicazione del completamento dei controlli pre-deploy;
 - indicazione che il job non ha modificato risorse del cluster o alias.

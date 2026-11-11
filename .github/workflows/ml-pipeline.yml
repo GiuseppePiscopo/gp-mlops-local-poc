@@ -176,7 +176,7 @@ jobs:
             --workspace "$TEST_SET_WORKSPACE"
 
   deploy:
-    name: Deploy (approval only)
+    name: Deploy (checks only)
     needs: train-and-evaluate
     if: >-
       success() &&
@@ -184,30 +184,44 @@ jobs:
       github.ref == 'refs/heads/main' &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     environment: production
+    concurrency:
+      group: production-gp-mof-capstone-model
+      cancel-in-progress: false
+      queue: max
     runs-on: [self-hosted, Linux, X64, mlops-local]
     timeout-minutes: 5
     defaults:
       run:
         shell: bash
     env:
+      GIT_REPOSITORY: ${{ github.workspace }}
+      DOCKER_NETWORK: mlops-local-network
+      MLFLOW_TRACKING_URI: http://mlflow:5000
       MODEL_RUN_ID: ${{ needs.train-and-evaluate.outputs.run_id }}
       MODEL_URI: ${{ needs.train-and-evaluate.outputs.model_uri }}
       MODEL_COMMIT: ${{ needs.train-and-evaluate.outputs.git_commit }}
       REGISTERED_MODEL: ${{ needs.train-and-evaluate.outputs.registered_model }}
       MODEL_VERSION: ${{ needs.train-and-evaluate.outputs.model_version }}
+      EVALUATION_MODE: ${{ needs.train-and-evaluate.outputs.evaluation_mode }}
     steps:
+      - name: Checkout with LFS
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          lfs: true
+          persist-credentials: false
+
+      - name: Verify Linux checkout and commit
+        run: |
+          bash "$GIT_REPOSITORY/ci-cd/scripts/verify-checkout.sh" \
+            "$GIT_REPOSITORY" "$GITHUB_SHA"
+
+      - name: Check approved model and current champion
+        run: |
+          bash "$GIT_REPOSITORY/ci-cd/scripts/check-deployment.sh"
+
       - name: Report approved deployment target
         run: |
           set -euo pipefail
-          : "${MODEL_RUN_ID:?Missing source run ID}"
-          : "${MODEL_URI:?Missing logged model URI}"
-          : "${MODEL_COMMIT:?Missing model commit}"
-          : "${REGISTERED_MODEL:?Missing registered model}"
-          : "${MODEL_VERSION:?Missing registered model version}"
-          if [[ ! "$MODEL_VERSION" =~ ^[1-9][0-9]*$ || "$MODEL_COMMIT" != "$GITHUB_SHA" ]]; then
-            echo "Invalid registered model version or mismatched workflow commit." >&2
-            exit 1
-          fi
           printf '%s\n' \
             '## Production approval' \
             '' \
@@ -217,5 +231,5 @@ jobs:
             "- Model URI: \`$MODEL_URI\`" \
             "- Commit: \`$MODEL_COMMIT\`" \
             '' \
-            'Approval completed. Deployment is not implemented yet; no cluster resources or model aliases were changed by this job.' \
+            'Approval and pre-deployment checks completed. Deployment is not implemented yet; no cluster resources or model aliases were changed by this job.' \
             >> "$GITHUB_STEP_SUMMARY"
