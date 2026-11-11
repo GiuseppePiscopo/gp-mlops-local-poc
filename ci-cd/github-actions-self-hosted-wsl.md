@@ -229,7 +229,7 @@ Nel **Summary**, verificare:
 Aprire in MLflow il run indicato nel Summary e verificare:
 
 - stato `FINISHED`;
-- artifact `evaluation/report.json`, con `mode` uguale a `relative` e
+- nella cartella artifact `evaluation`, file `report.json`, con `mode` uguale a `relative` e
   `passed` uguale a `true`;
 - tag `evaluation.passed` uguale a `true`;
 - RMSE del candidato minore o uguale a quello del champion nel report.
@@ -238,7 +238,7 @@ Verificare infine il successo dello step **Clean ephemeral test set**.
 
 Nel dettaglio dell'esecuzione GitHub, verificare il successo degli step
 **Export training and evaluation results** e **Upload training and evaluation
-results**. Nella sezione **Artifacts**, scaricare
+results**. Nella sezione **Artifacts** del riepilogo dell'esecuzione GitHub, scaricare
 `training-evaluation-<run ID GitHub>-<run attempt>` e verificare:
 
 - `training-result.json`: stessi run MLflow, URI del modello e commit del Summary;
