@@ -28,6 +28,13 @@ jobs:
        github.event.pull_request.user.login == 'GiuseppePiscopo')
     runs-on: [self-hosted, Linux, X64, mlops-local]
     timeout-minutes: 30
+    outputs:
+      run_id: ${{ steps.results.outputs.run_id }}
+      model_uri: ${{ steps.results.outputs.model_uri }}
+      git_commit: ${{ steps.results.outputs.git_commit }}
+      evaluation_mode: ${{ steps.results.outputs.evaluation_mode }}
+      evaluation_passed: ${{ steps.results.outputs.evaluation_passed }}
+      artifact_name: ${{ steps.results.outputs.artifact_name }}
     defaults:
       run:
         shell: bash
@@ -38,6 +45,7 @@ jobs:
       TRAINING_SNAPSHOT: snapshot-${{ github.run_id }}-${{ github.run_attempt }}
       TEST_SET_WORKSPACE: test-set-${{ github.run_id }}-${{ github.run_attempt }}
       EVALUATION_DIRECTORY: evaluation-${{ github.run_id }}-${{ github.run_attempt }}
+      RESULTS_DIRECTORY: results-${{ github.run_id }}-${{ github.run_attempt }}
       TRAINING_DATA_HOST_PATH: /opt/mlops-local-poc/training/data/input/SeoulBikeData.csv
       DOCKER_NETWORK: mlops-local-network
       MLFLOW_TRACKING_URI: http://mlflow:5000
@@ -98,6 +106,7 @@ jobs:
             "$RUNNER_TEMP/$EVALUATION_DIRECTORY"
 
       - name: Report training and evaluation
+        id: report
         if: ${{ !cancelled() && steps.evaluation.outcome != 'skipped' }}
         run: |
           set -euo pipefail
@@ -105,6 +114,27 @@ jobs:
             --result "$RUNNER_TEMP/$TRAINING_RESULT" \
             --evaluation "$RUNNER_TEMP/$EVALUATION_DIRECTORY/report.json" \
             --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Export training and evaluation results
+        id: results
+        if: ${{ !cancelled() && steps.report.outcome == 'success' }}
+        run: |
+          python3 "$GIT_REPOSITORY/ci-cd/scripts/export-training-evaluation.py" \
+            --result "$RUNNER_TEMP/$TRAINING_RESULT" \
+            --evaluation "$RUNNER_TEMP/$EVALUATION_DIRECTORY/report.json" \
+            --expected-commit "$GITHUB_SHA" \
+            --workflow-run-id "$GITHUB_RUN_ID" \
+            --workflow-run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --artifact-directory "$RUNNER_TEMP/$RESULTS_DIRECTORY" \
+            --github-output "$GITHUB_OUTPUT"
+
+      - name: Upload training and evaluation results
+        if: ${{ !cancelled() && steps.results.outcome == 'success' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ${{ steps.results.outputs.artifact_name }}
+          path: ${{ runner.temp }}/${{ env.RESULTS_DIRECTORY }}/*.json
+          if-no-files-found: error
 
       - name: Report pipeline scope
         run: |

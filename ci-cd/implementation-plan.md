@@ -90,9 +90,11 @@ le evidenze sono in [design.md](design.md); la procedura operativa in costruzion
   - [x] Aggiornare launcher, workflow e test; verificare alterazioni di CSV/test set,
     parità, regressione ed esportazione del report anche a gate fallito.
 - [x] Implementare bootstrap esplicito con soglie assolute e controlli dedicati.
-- [ ] Produrre risultati JSON, report e output tra job secondo il design;
+- [x] Produrre risultati JSON e report come artifact della stessa esecuzione,
+  predisporre gli output del job con identità del candidato e del gate;
   pubblicare metriche ed esiti nel riepilogo del workflow.
-- [ ] Registrare solo post-gate su main/manuale e assegnare candidate READY.
+- [ ] Registrare solo post-gate su main/manuale e assegnare candidate READY;
+  aggiungere agli output la versione esatta per il job di deploy.
 - [ ] Estendere resolver, CLI, lock e documentazione per versione esplicita,
   preservando il rendering manuale per alias.
 - [ ] Definire serializzazione dei deploy e rifiuto dei rilasci obsoleti

@@ -213,7 +213,8 @@ registrazione di modelli o deploy.
 ## Avviare training ed evaluation
 
 Con il runner attivo, aprire **Actions > ML pipeline > Run workflow** e
-selezionare `main`. Lasciare `bootstrap` non selezionato e avviare l'esecuzione.
+selezionare `main`. Lasciare **Initial model only...** non selezionato e
+avviare l'esecuzione.
 
 Verificare il successo degli step **Prepare dataset and champion snapshot**,
 **Train without model registration**, **Evaluate candidate** e **Report
@@ -234,3 +235,17 @@ Aprire in MLflow il run indicato nel Summary e verificare:
 - RMSE del candidato minore o uguale a quello del champion nel report.
 
 Verificare infine il successo dello step **Clean ephemeral test set**.
+
+Nel dettaglio dell'esecuzione GitHub, verificare il successo degli step
+**Export training and evaluation results** e **Upload training and evaluation
+results**. Nella sezione **Artifacts**, scaricare
+`training-evaluation-<run ID GitHub>-<run attempt>` e verificare:
+
+- `training-result.json`: stessi run MLflow, URI del modello e commit del Summary;
+- `evaluation-report.json`: stesso confronto dell'artifact MLflow
+  `evaluation/report.json`, con `passed` uguale a `true`;
+- `execution.json`: ID e attempt dell'esecuzione GitHub corrente, commit,
+  riferimenti al candidato, `evaluation_mode` uguale a `relative` ed
+  `evaluation_passed` uguale a `true`.
+
+Atteso: l'archivio contiene soltanto i tre JSON, senza `test-data.json`.
