@@ -18,6 +18,7 @@ class ExportTrainingEvaluationTests(unittest.TestCase):
         self.report_path = self.root / "report.json"
         self.output = self.root / "github-output"
         self.artifacts = self.root / "artifacts"
+        self.registration = None
         self.candidate = {"run_id": "b" * 32, "model_uri": "models:/m-" + "c" * 32, "git_commit": "a" * 40}
         self.identity = {"dataset_sha256": "dataset", "test_values_sha256": "test-values", "test_rows": 20}
         self.result = {
@@ -38,6 +39,11 @@ class ExportTrainingEvaluationTests(unittest.TestCase):
         self.result_path.write_text(json.dumps(self.result))
         if write_report:
             self.report_path.write_text(json.dumps(self.report))
+        registration_args = []
+        if self.registration is not None:
+            path = self.root / "registration.json"
+            path.write_text(json.dumps(self.registration))
+            registration_args = ["--registration", str(path)]
         return subprocess.run(
             [
                 sys.executable,
@@ -56,6 +62,9 @@ class ExportTrainingEvaluationTests(unittest.TestCase):
                 str(self.artifacts),
                 "--github-output",
                 str(self.output),
+                "--summary",
+                str(self.root / "summary.md"),
+                *registration_args,
             ],
             capture_output=True,
             text=True,
@@ -150,6 +159,45 @@ class ExportTrainingEvaluationTests(unittest.TestCase):
         self.assertIn("export failed", process.stderr)
         self.assertFalse(self.output.exists())
         self.assertFalse(self.artifacts.exists())
+
+    def test_registration_adds_exact_version_outputs_receipt_and_summary(self):
+        self.registration = {
+            **self.candidate,
+            "registered_model": "model",
+            "model_version": "3",
+            "status": "READY",
+        }
+        process = self.export()
+        self.assertEqual(process.returncode, 0, process.stderr)
+        self.assertEqual(json.loads((self.artifacts / "registration-result.json").read_text()), self.registration)
+        execution = json.loads((self.artifacts / "execution.json").read_text())
+        self.assertEqual(execution["registered_model"], "model")
+        self.assertEqual(execution["model_version"], "3")
+        self.assertIn("model_version=3\n", self.output.read_text())
+        self.assertIn("registered_model=model\n", self.output.read_text())
+        self.assertIn("Model version: `3`", (self.root / "summary.md").read_text())
+
+    def test_invalid_registration_cannot_publish_a_version(self):
+        receipt = {**self.candidate, "registered_model": "model", "model_version": "3", "status": "READY"}
+        for key, value in (
+            ("run_id", "e" * 32),
+            ("git_commit", "f" * 40),
+            ("model_uri", "models:/m-" + "d" * 32),
+            ("status", "PENDING_REGISTRATION"),
+            ("model_version", "0"),
+            ("registered_model", "model\ninjected=value"),
+        ):
+            with self.subTest(key=key):
+                self.registration = {**receipt, key: value}
+                process = self.export()
+                self.assertNotEqual(process.returncode, 0)
+                self.assertFalse(self.output.exists())
+                self.assertFalse(self.artifacts.exists())
+        self.registration = receipt
+        self.report["passed"] = False
+        process = self.export()
+        self.assertNotEqual(process.returncode, 0)
+        self.assertFalse(self.output.exists())
 
 
 if __name__ == "__main__":

@@ -93,7 +93,7 @@ le evidenze sono in [design.md](design.md); la procedura operativa in costruzion
 - [x] Produrre risultati JSON e report come artifact della stessa esecuzione,
   predisporre gli output del job con identità del candidato e del gate;
   pubblicare metriche ed esiti nel riepilogo del workflow.
-- [ ] Registrare solo post-gate su main/manuale e assegnare candidate READY;
+- [x] Registrare solo post-gate su main/manuale e assegnare candidate READY;
   aggiungere agli output la versione esatta per il job di deploy.
 - [ ] Estendere resolver, CLI, lock e documentazione per versione esplicita,
   preservando il rendering manuale per alias.

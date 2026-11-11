@@ -235,6 +235,58 @@ class EvaluationIntegrationTests(unittest.TestCase):
         self.assert_exported_results(report_path, passed=False)
         self.assert_registry_unchanged()
 
+    def test_passed_candidate_registers_exact_model_without_changing_champion_or_baseline(self):
+        self.client.set_registered_model_alias("isolated-model", "baseline", "1")
+        self.client.set_registered_model_alias("isolated-model", "candidate", "1")
+        train.main(self.args)
+        candidate = json.loads(self.args.result_json.read_text())
+        report_path = self.root / "report.json"
+        evaluate.evaluate_training(
+            self.args.result_json, self.args.input_snapshot, self.args.test_set_directory, report_path, "a" * 40
+        )
+        receipt_path = self.root / "registration.json"
+        process = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "registration.register_candidate",
+                "--training-result",
+                str(self.args.result_json),
+                "--input-snapshot",
+                str(self.args.input_snapshot),
+                "--evaluation",
+                str(report_path),
+                "--registered-model",
+                "isolated-model",
+                "--expected-commit",
+                "a" * 40,
+                "--event-name",
+                "push",
+                "--git-ref",
+                "refs/heads/main",
+                "--result",
+                str(receipt_path),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
+        receipt = json.loads(receipt_path.read_text())
+        self.assertEqual(receipt["model_version"], "2")
+        self.assertEqual(receipt["run_id"], candidate["run_id"])
+        self.assertEqual(receipt["model_uri"], candidate["model_uri"])
+        version = self.client.get_model_version("isolated-model", receipt["model_version"])
+        self.assertEqual(version.status, "READY")
+        self.assertEqual(version.run_id, candidate["run_id"])
+        logged_model = self.client.get_logged_model(candidate["model_uri"].removeprefix("models:/"))
+        self.assertEqual(version.source, candidate["model_uri"])
+        self.assertEqual(logged_model.source_run_id, version.run_id)
+        self.assertEqual(version.tags["git.commit"], "a" * 40)
+        self.assertEqual(str(self.client.get_model_version_by_alias("isolated-model", "candidate").version), "2")
+        self.assertEqual(str(self.client.get_model_version_by_alias("isolated-model", "champion").version), "1")
+        self.assertEqual(str(self.client.get_model_version_by_alias("isolated-model", "baseline").version), "1")
+        self.assertEqual(len(self.client.search_runs([self.client.get_run(candidate["run_id"]).info.experiment_id])), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

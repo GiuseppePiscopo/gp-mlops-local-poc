@@ -18,6 +18,8 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--workflow-run-attempt", required=True)
     parser.add_argument("--artifact-directory", type=Path, required=True)
     parser.add_argument("--github-output", type=Path, required=True)
+    parser.add_argument("--registration", type=Path)
+    parser.add_argument("--summary", type=Path)
     return parser.parse_args()
 
 
@@ -63,6 +65,21 @@ def export_results(args: argparse.Namespace) -> None:
         ):
             raise ValueError("Missing or non-finite evaluation metrics.")
 
+    # Accept version outputs only from a successful receipt for this evaluated candidate.
+    registration = None
+    if args.registration is not None:
+        registration = json.loads(args.registration.read_text(encoding="utf-8"))
+        if (
+            report["passed"] is not True
+            or any(registration[key] != value for key, value in candidate.items())
+            or registration["status"] != "READY"
+            or not re.fullmatch(r"[1-9][0-9]*", registration["model_version"])
+            or not isinstance(registration["registered_model"], str)
+            or not registration["registered_model"].strip()
+            or any(character in registration["registered_model"] for character in "\r\n")
+        ):
+            raise ValueError("Registration receipt does not identify a READY version of the evaluated candidate.")
+
     # Keep outputs as strings while preserving the boolean outcome in execution metadata.
     artifact_name = f"training-evaluation-{args.workflow_run_id}-{args.workflow_run_attempt}"
     outputs = {
@@ -71,6 +88,8 @@ def export_results(args: argparse.Namespace) -> None:
         "evaluation_passed": str(report["passed"]).lower(),
         "artifact_name": artifact_name,
     }
+    if registration is not None:
+        outputs.update({key: registration[key] for key in ("registered_model", "model_version")})
     execution = {
         "workflow_run_id": args.workflow_run_id,
         "workflow_run_attempt": args.workflow_run_attempt,
@@ -84,6 +103,8 @@ def export_results(args: argparse.Namespace) -> None:
         "evaluation-report.json": report,
         "execution.json": execution,
     }
+    if registration is not None:
+        documents["registration-result.json"] = registration
     serialized = {name: json.dumps(document, indent=2, allow_nan=False) + "\n" for name, document in documents.items()}
 
     # Write a new bundle without overwriting artifacts from an earlier invocation.
@@ -95,6 +116,15 @@ def export_results(args: argparse.Namespace) -> None:
     # Publish step outputs only after the complete bundle has been written.
     with args.github_output.open("a", encoding="utf-8") as stream:
         stream.write("".join(f"{key}={value}\n" for key, value in outputs.items()))
+    if registration is not None and args.summary is not None:
+        with args.summary.open("a", encoding="utf-8") as stream:
+            stream.write(
+                "\n## Model registration\n\n"
+                f"- Registered model: `{registration['registered_model']}`\n"
+                f"- Model version: `{registration['model_version']}`\n"
+                "- Status: `READY`\n"
+                "- Alias: `candidate`\n"
+            )
     print(f"Exported {artifact_name}: evaluation_passed={outputs['evaluation_passed']}")
 
 

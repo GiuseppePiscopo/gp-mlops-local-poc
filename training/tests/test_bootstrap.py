@@ -16,6 +16,7 @@ from evaluation import comparison, evaluate
 from mlflow.exceptions import MlflowException
 from mlflow.protos.databricks_pb2 import INVALID_PARAMETER_VALUE, PERMISSION_DENIED, RESOURCE_DOES_NOT_EXIST
 from random_forest import train
+from registration import register_candidate as registration
 
 import mlflow
 
@@ -102,7 +103,7 @@ class BootstrapTests(unittest.TestCase):
                     with self.assertRaises(type(error)):
                         comparison.evaluate_bootstrap({"model_uri": "models:/m-test"}, {}, None, None)
 
-    def test_real_bootstrap_training_evaluation_and_summary_without_registration(self):
+    def test_real_bootstrap_evaluation_then_explicit_registration(self):
         previous_tracking = mlflow.get_tracking_uri()
         self.addCleanup(mlflow.set_tracking_uri, previous_tracking)
         with tempfile.TemporaryDirectory(prefix="mlops-bootstrap-") as directory:
@@ -232,6 +233,22 @@ class BootstrapTests(unittest.TestCase):
                 # A registered model without the alias also permits bootstrap.
                 client.create_registered_model("new-model")
                 require_champion_absent(client, "new-model")
+                receipt = registration.register_candidate(
+                    argparse.Namespace(
+                        training_result=root / "training-10.json",
+                        evaluation=root / "report-10.json",
+                        input_snapshot=snapshot_path,
+                        registered_model="new-model",
+                        expected_commit="a" * 40,
+                        event_name="workflow_dispatch",
+                        git_ref="refs/heads/main",
+                        result=root / "registration.json",
+                    )
+                )
+                self.assertEqual(receipt["model_version"], "1")
+                self.assertEqual(client.get_model_version("new-model", "1").status, "READY")
+                self.assertEqual(str(client.get_model_version_by_alias("new-model", "candidate").version), "1")
+                self.assertNotIn("champion", client.get_registered_model("new-model").aliases)
 
 
 if __name__ == "__main__":

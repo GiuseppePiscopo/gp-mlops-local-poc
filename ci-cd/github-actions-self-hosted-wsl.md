@@ -216,15 +216,16 @@ Con il runner attivo, aprire **Actions > ML pipeline > Run workflow** e
 selezionare `main`. Lasciare **Initial model only...** non selezionato e
 avviare l'esecuzione.
 
-Verificare il successo degli step **Prepare dataset and champion snapshot**,
-**Train without model registration**, **Evaluate candidate** e **Report
-training and evaluation**.
+Aprire l'esecuzione e verificare che il job **Train and evaluate** e tutti
+i suoi step siano completati con successo.
 
 Nel **Summary**, verificare:
 
 - **Training result**: run MLflow, URI del modello e commit dell'esecuzione;
 - **Relative evaluation**: modello `gp-mof-capstone-model`, versione e run
   champion, metriche dei due modelli e `Passed` uguale a `True`.
+- **Model registration**: modello `gp-mof-capstone-model`, nuovo numero di
+  versione, stato `READY` e alias `candidate`.
 
 Aprire in MLflow il run indicato nel Summary e verificare:
 
@@ -234,11 +235,15 @@ Aprire in MLflow il run indicato nel Summary e verificare:
 - tag `evaluation.passed` uguale a `true`;
 - RMSE del candidato minore o uguale a quello del champion nel report.
 
-Verificare infine il successo dello step **Clean ephemeral test set**.
+Aprire **Models > gp-mof-capstone-model** in MLflow e selezionare la versione
+indicata nella sezione **Model registration** del Summary. Verificare:
 
-Nel dettaglio dell'esecuzione GitHub, verificare il successo degli step
-**Export training and evaluation results** e **Upload training and evaluation
-results**. Nella sezione **Artifacts** del riepilogo dell'esecuzione GitHub, scaricare
+- alias `candidate` assegnato alla nuova versione;
+- run sorgente uguale al run della sezione **Training result**;
+- source uguale all'URI `models:/m-<model ID>` della sezione **Training result**;
+- alias `champion` e `baseline` ancora sulle versioni precedenti.
+
+Nella sezione **Artifacts** del riepilogo dell'esecuzione GitHub, scaricare
 `training-evaluation-<run ID GitHub>-<run attempt>` e verificare:
 
 - `training-result.json`: stessi run MLflow, URI del modello e commit del Summary;
@@ -246,6 +251,9 @@ results**. Nella sezione **Artifacts** del riepilogo dell'esecuzione GitHub, sca
   `evaluation/report.json`, con `passed` uguale a `true`;
 - `execution.json`: ID e attempt dell'esecuzione GitHub corrente, commit,
   riferimenti al candidato, `evaluation_mode` uguale a `relative` ed
-  `evaluation_passed` uguale a `true`.
+  `evaluation_passed` uguale a `true`; `registered_model` e `model_version`
+  uguali al modello e alla versione del Summary;
+- `registration-result.json`: stessi run, URI e commit di `training-result.json`,
+  modello `gp-mof-capstone-model`, versione registrata e `status` uguale a `READY`.
 
-Atteso: l'archivio contiene soltanto i tre JSON, senza `test-data.json`.
+Atteso: l'archivio contiene soltanto i quattro JSON, senza `test-data.json`.

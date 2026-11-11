@@ -35,6 +35,8 @@ jobs:
       evaluation_mode: ${{ steps.results.outputs.evaluation_mode }}
       evaluation_passed: ${{ steps.results.outputs.evaluation_passed }}
       artifact_name: ${{ steps.results.outputs.artifact_name }}
+      registered_model: ${{ steps.results.outputs.registered_model }}
+      model_version: ${{ steps.results.outputs.model_version }}
     defaults:
       run:
         shell: bash
@@ -46,6 +48,7 @@ jobs:
       TEST_SET_WORKSPACE: test-set-${{ github.run_id }}-${{ github.run_attempt }}
       EVALUATION_DIRECTORY: evaluation-${{ github.run_id }}-${{ github.run_attempt }}
       RESULTS_DIRECTORY: results-${{ github.run_id }}-${{ github.run_attempt }}
+      REGISTRATION_DIRECTORY: registration-${{ github.run_id }}-${{ github.run_attempt }}
       TRAINING_DATA_HOST_PATH: /opt/mlops-local-poc/training/data/input/SeoulBikeData.csv
       DOCKER_NETWORK: mlops-local-network
       MLFLOW_TRACKING_URI: http://mlflow:5000
@@ -115,10 +118,29 @@ jobs:
             --evaluation "$RUNNER_TEMP/$EVALUATION_DIRECTORY/report.json" \
             --summary "$GITHUB_STEP_SUMMARY"
 
+      - name: Register evaluated model as candidate
+        id: registration
+        if: >-
+          success() &&
+          (github.event_name == 'workflow_dispatch' ||
+           (github.event_name == 'push' && github.ref == 'refs/heads/main'))
+        run: |
+          bash "$GIT_REPOSITORY/ci-cd/scripts/register-candidate.sh" \
+            "$RUNNER_TEMP/$TRAINING_RESULT" \
+            "$RUNNER_TEMP/$TRAINING_SNAPSHOT/snapshot.json" \
+            "$RUNNER_TEMP/$EVALUATION_DIRECTORY/report.json" \
+            "$RUNNER_TEMP/$REGISTRATION_DIRECTORY"
+
       - name: Export training and evaluation results
         id: results
         if: ${{ !cancelled() && steps.report.outcome == 'success' }}
+        env:
+          REGISTRATION_OUTCOME: ${{ steps.registration.outcome }}
         run: |
+          REGISTRATION_ARGS=()
+          if [[ "$REGISTRATION_OUTCOME" == "success" ]]; then
+            REGISTRATION_ARGS+=(--registration "$RUNNER_TEMP/$REGISTRATION_DIRECTORY/registration-result.json")
+          fi
           python3 "$GIT_REPOSITORY/ci-cd/scripts/export-training-evaluation.py" \
             --result "$RUNNER_TEMP/$TRAINING_RESULT" \
             --evaluation "$RUNNER_TEMP/$EVALUATION_DIRECTORY/report.json" \
@@ -126,7 +148,9 @@ jobs:
             --workflow-run-id "$GITHUB_RUN_ID" \
             --workflow-run-attempt "$GITHUB_RUN_ATTEMPT" \
             --artifact-directory "$RUNNER_TEMP/$RESULTS_DIRECTORY" \
-            --github-output "$GITHUB_OUTPUT"
+            --github-output "$GITHUB_OUTPUT" \
+            --summary "$GITHUB_STEP_SUMMARY" \
+            "${REGISTRATION_ARGS[@]}"
 
       - name: Upload training and evaluation results
         if: ${{ !cancelled() && steps.results.outcome == 'success' }}
@@ -141,7 +165,7 @@ jobs:
           printf '%s\n' \
             '## Pipeline scope' \
             '' \
-            'Training and evaluation completed. Model Registry registration and deployment are not implemented yet.' \
+            'Training and evaluation completed. Registration runs only after a successful gate on main/manual runs. Deployment is not implemented yet.' \
             >> "$GITHUB_STEP_SUMMARY"
 
       - name: Clean ephemeral test set
