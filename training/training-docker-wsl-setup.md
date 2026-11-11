@@ -2,9 +2,7 @@
 
 Questa procedura sincronizza in WSL2 il componente di training del capstone, costruisce l'immagine Docker, esegue due training containerizzati di un `RandomForestRegressor` sul dataset Seoul Bike Sharing e ne registra le versioni nel Model Registry MLflow, inclusi assegnazione degli alias e verifica del recupero del modello.
 
-Il repository Git Windows contiene codice, Dockerfile, script e dataset di esempio. La directory `/opt/mlops-local-poc/training` in WSL contiene la copia operativa degli script e il dataset runtime, mai copiato nell'immagine Docker né committato nel repository.
-
-Questa procedura presuppone uno stack MLflow già installato e funzionante, raggiungibile nella rete Docker `mlops-local-network` (vedi `mlflow/mlflow-docker-wsl-setup.md`). Non copre l'integrazione con KServe, trattata in una procedura dedicata.
+Questa procedura non copre l'integrazione con KServe, trattata in una procedura dedicata.
 
 ## Prerequisiti
 
@@ -17,6 +15,8 @@ Questa procedura presuppone uno stack MLflow già installato e funzionante, ragg
 - `rsync`, `sed`, `find`, `curl` disponibili in WSL
 - `python3` (>= 3.11) e Git disponibili in WSL; repository sorgente pulito e
   completo di `ci-cd/scripts/prepare_image.py`.
+
+Il repository Git Windows contiene codice, Dockerfile, script e dataset di esempio. La directory `/opt/mlops-local-poc/training` in WSL contiene la copia operativa degli script e il dataset runtime, mai copiato nell'immagine Docker né committato nel repository.
 
 ## Verificare la raggiungibilità di MLflow
 

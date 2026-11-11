@@ -191,7 +191,8 @@ def main(args: argparse.Namespace) -> None:
         mlflow.set_tags(dataset_tags)
         if input_snapshot is not None:
             mlflow.log_dict(input_snapshot, "evaluation/input-snapshot.json")
-            mlflow.log_dict(input_snapshot["champion"], "evaluation/champion-snapshot.json")
+            if input_snapshot["champion"] is not None:
+                mlflow.log_dict(input_snapshot["champion"], "evaluation/champion-snapshot.json")
 
         mlflow.log_params(
             {

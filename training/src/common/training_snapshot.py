@@ -5,10 +5,23 @@ import json
 import re
 from pathlib import Path
 
+from mlflow.exceptions import MlflowException
+
 from mlflow import MlflowClient
 
 DATASET_FILENAME = "SeoulBikeData.csv"
 SNAPSHOT_FILENAME = "snapshot.json"
+
+
+def require_champion_absent(client: MlflowClient, registered_model: str) -> None:
+    try:
+        model = client.get_registered_model(registered_model)
+    except MlflowException as error:
+        if error.error_code != "RESOURCE_DOES_NOT_EXIST":
+            raise
+        return
+    if "champion" in model.aliases:
+        raise ValueError("Bootstrap requires an absent champion; use the ordinary relative workflow.")
 
 
 def snapshot_champion(client: MlflowClient, registered_model: str) -> dict:
@@ -27,18 +40,29 @@ def snapshot_champion(client: MlflowClient, registered_model: str) -> dict:
 
 
 def prepare_snapshot(
-    client: MlflowClient, registered_model: str, dataset: Path, output_directory: Path, git_commit: str
+    client: MlflowClient,
+    registered_model: str,
+    dataset: Path,
+    output_directory: Path,
+    git_commit: str,
+    bootstrap: bool = False,
 ) -> dict:
     if not re.fullmatch(r"[0-9a-f]{40}", git_commit):
         raise ValueError("Snapshot requires the full Git commit.")
     if any(output_directory.iterdir()):
         raise ValueError("Snapshot output directory must be empty.")
-    champion = snapshot_champion(client, registered_model)
+    if bootstrap:
+        require_champion_absent(client, registered_model)
+        champion = None
+    else:
+        champion = snapshot_champion(client, registered_model)
     content = dataset.read_bytes()
     if not content or content.startswith(b"version https://git-lfs.github.com/spec/v1"):
         raise ValueError("Dataset must contain CSV data, not an empty file or LFS pointer.")
     snapshot = {
         "git_commit": git_commit,
+        "mode": "bootstrap" if bootstrap else "relative",
+        "registered_model": registered_model,
         "champion": champion,
         "dataset": {
             "filename": DATASET_FILENAME,
@@ -69,6 +93,14 @@ def load_snapshot(manifest: Path, content: bytes, git_commit: str, registered_mo
     ):
         raise ValueError("Dataset does not match the initial snapshot.")
     champion = snapshot["champion"]
+    if snapshot["registered_model"] != registered_model:
+        raise ValueError("Snapshot registered model does not match training.")
+    if snapshot["mode"] == "bootstrap":
+        if champion is not None:
+            raise ValueError("Bootstrap snapshot cannot contain a champion.")
+        return snapshot
+    if snapshot["mode"] != "relative" or champion is None:
+        raise ValueError("Invalid snapshot evaluation mode.")
     if (
         champion["registered_model"] != registered_model
         or not re.fullmatch(r"[1-9][0-9]*", champion["version"])

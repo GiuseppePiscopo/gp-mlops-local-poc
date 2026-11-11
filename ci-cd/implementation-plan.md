@@ -89,7 +89,7 @@ le evidenze sono in [design.md](design.md); la procedura operativa in costruzion
     non rileggere alias o CSV runtime e non ripetere split/preprocessing.
   - [x] Aggiornare launcher, workflow e test; verificare alterazioni di CSV/test set,
     parità, regressione ed esportazione del report anche a gate fallito.
-- [ ] Implementare bootstrap esplicito con soglie assolute e controlli dedicati.
+- [x] Implementare bootstrap esplicito con soglie assolute e controlli dedicati.
 - [ ] Produrre risultati JSON, report e output tra job secondo il design;
   pubblicare metriche ed esiti nel riepilogo del workflow.
 - [ ] Registrare solo post-gate su main/manuale e assegnare candidate READY.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Append training identifiers and relative evaluation results to a job summary."""
+"""Append training identifiers and evaluation results to a job summary."""
 
 import argparse
 import json
@@ -21,19 +21,40 @@ def main() -> None:
     report = json.loads(args.evaluation.read_text(encoding="utf-8"))
     if report["candidate"] != identifiers:
         raise ValueError("Evaluation report does not match the training result.")
+    if report["mode"] == "relative":
+        heading = "Relative evaluation"
+        reference = (
+            f"- Champion: `{report['champion']['registered_model']}` version `{report['champion']['version']}`\n"
+            + f"- Champion run: `{report['champion']['run_id']}`\n"
+        )
+    elif report["mode"] == "bootstrap":
+        heading = "Bootstrap evaluation"
+        reference = (
+            "- Champion: absent at preparation\n"
+            + f"- Required R2 >= `{report['thresholds']['r2_min']}`\n"
+            + f"- Required RMSE <= `{report['thresholds']['rmse_max']}`\n"
+        )
+    else:
+        raise ValueError(f"Unknown evaluation mode: {report['mode']}")
     text = (
         "## Training result\n\n```json\n"
         + json.dumps(identifiers, indent=2)
-        + "\n```\n\n## Relative evaluation\n\n"
-        + f"- Champion: `{report['champion']['registered_model']}` version `{report['champion']['version']}`\n"
-        + f"- Champion run: `{report['champion']['run_id']}`\n"
+        + f"\n```\n\n## {heading}\n\n"
+        + reference
         + f"- Dataset SHA-256: `{report['test_set']['dataset_sha256']}`\n"
         + f"- Test values SHA-256: `{report['test_set']['test_values_sha256']}`\n"
         + f"- Test rows: `{report['test_set']['test_rows']}`\n\n"
-        + "| Metric | Candidate | Champion |\n|---|---|---|\n"
+    )
+    text += (
+        "| Metric | Candidate | Champion |\n|---|---|---|\n"
+        if report["mode"] == "relative"
+        else "| Metric | Candidate |\n|---|---|\n"
     )
     for metric in ("rmse", "mae", "r2", "mape"):
-        text += f"| {metric} | {report['candidate_metrics'][metric]} | {report['champion_metrics'][metric]} |\n"
+        text += f"| {metric} | {report['candidate_metrics'][metric]} |"
+        if report["mode"] == "relative":
+            text += f" {report['champion_metrics'][metric]} |"
+        text += "\n"
     text += f"\n- Passed: `{report['passed']}`\n"
     with args.summary.open("a", encoding="utf-8") as stream:
         stream.write(text)

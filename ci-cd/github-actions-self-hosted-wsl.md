@@ -1,8 +1,8 @@
 # CI/CD GitHub Actions con runner WSL
 
 Questa procedura configura un runner GitHub Actions nel laboratorio WSL con
-Docker e KinD. Le sezioni disponibili coprono la preparazione del runner
-e degli accessi locali.
+Docker e KinD, verifica checkout e build delle immagini ed esegue training
+ed evaluation del modello `gp-mof-capstone-model` con MLflow.
 
 ## Prerequisiti
 
@@ -209,3 +209,28 @@ Nel nuovo Summary verificare:
 
 Questa verifica costruisce soltanto l'immagine: non esegue training,
 registrazione di modelli o deploy.
+
+## Avviare training ed evaluation
+
+Con il runner attivo, aprire **Actions > ML pipeline > Run workflow** e
+selezionare `main`. Lasciare `bootstrap` non selezionato e avviare l'esecuzione.
+
+Verificare il successo degli step **Prepare dataset and champion snapshot**,
+**Train without model registration**, **Evaluate candidate** e **Report
+training and evaluation**.
+
+Nel **Summary**, verificare:
+
+- **Training result**: run MLflow, URI del modello e commit dell'esecuzione;
+- **Relative evaluation**: modello `gp-mof-capstone-model`, versione e run
+  champion, metriche dei due modelli e `Passed` uguale a `True`.
+
+Aprire in MLflow il run indicato nel Summary e verificare:
+
+- stato `FINISHED`;
+- artifact `evaluation/report.json`, con `mode` uguale a `relative` e
+  `passed` uguale a `true`;
+- tag `evaluation.passed` uguale a `true`;
+- RMSE del candidato minore o uguale a quello del champion nel report.
+
+Verificare infine il successo dello step **Clean ephemeral test set**.

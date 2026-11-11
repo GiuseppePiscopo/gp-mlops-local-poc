@@ -17,6 +17,7 @@ class EvaluateTrainingTests(unittest.TestCase):
         self.root = Path(temporary.name)
         self.candidate = {"run_id": "candidate-run", "model_uri": "models:/m-candidate", "git_commit": "a" * 40}
         self.snapshot = {
+            "mode": "relative",
             "git_commit": "a" * 40,
             "dataset": {"sha256": "dataset-hash"},
             "champion": {"registered_model": "model", "version": "1", "model_uri": "models:/model/1"},
@@ -73,6 +74,15 @@ class EvaluateTrainingTests(unittest.TestCase):
             gate.assert_not_called()
         self.assertFalse(self.report.exists())
         self.client.log_dict.assert_not_called()
+
+    def test_mode_or_champion_mismatch_blocks_before_reading_registry(self):
+        for mode, champion in (("bootstrap", None), ("relative", None), ("unknown", self.snapshot["champion"])):
+            with self.subTest(mode=mode, champion=champion):
+                self.input_snapshot.write_text(json.dumps({**self.snapshot, "mode": mode, "champion": champion}))
+                with self.assertRaises(ValueError):
+                    self.run_evaluation()
+                self.assertFalse(self.report.exists())
+        self.client.get_run.assert_not_called()
 
     def test_gate_error_is_not_converted_to_success(self):
         with patch.object(evaluate, "evaluate_candidate", side_effect=RuntimeError("Cannot load champion")):

@@ -12,6 +12,18 @@ fi
 : "${MLFLOW_TRACKING_URI:?MLFLOW_TRACKING_URI is required}"
 : "${REGISTERED_MODEL_NAME:?REGISTERED_MODEL_NAME is required}"
 
+MODE_ARGS=()
+case "${PIPELINE_BOOTSTRAP:-false}" in
+  true)
+    if [[ "${GITHUB_EVENT_NAME:-}" != "workflow_dispatch" ]]; then
+      echo "Bootstrap is allowed only for workflow_dispatch." >&2; exit 1
+    fi
+    MODE_ARGS+=(--bootstrap)
+    ;;
+  false) ;;
+  *) echo "PIPELINE_BOOTSTRAP must be true or false." >&2; exit 1 ;;
+esac
+
 DATASET="$(realpath -e -- "$1")"
 OUTPUT_DIRECTORY="$(realpath -m -- "$2")"
 REPOSITORY="$(realpath -e -- "$GIT_REPOSITORY")"
@@ -34,4 +46,5 @@ exec docker run --rm \
   --training-data /data/input/SeoulBikeData.csv \
   --output-directory /output \
   --registered-model "$REGISTERED_MODEL_NAME" \
-  --git-commit "$COMMIT"
+  --git-commit "$COMMIT" \
+  "${MODE_ARGS[@]}"

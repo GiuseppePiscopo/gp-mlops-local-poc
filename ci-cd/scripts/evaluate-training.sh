@@ -11,6 +11,18 @@ fi
 : "${DOCKER_NETWORK:?DOCKER_NETWORK is required}"
 : "${MLFLOW_TRACKING_URI:?MLFLOW_TRACKING_URI is required}"
 
+MODE_ARGS=()
+case "${PIPELINE_BOOTSTRAP:-false}" in
+  true)
+    if [[ "${GITHUB_EVENT_NAME:-}" != "workflow_dispatch" ]]; then
+      echo "Bootstrap is allowed only for workflow_dispatch." >&2; exit 1
+    fi
+    MODE_ARGS+=(--bootstrap)
+    ;;
+  false) ;;
+  *) echo "PIPELINE_BOOTSTRAP must be true or false." >&2; exit 1 ;;
+esac
+
 TRAINING_RESULT="$(realpath -e -- "$1")"
 SNAPSHOT="$(realpath -e -- "$2")"
 TEST_SET_DIRECTORY="$(realpath -e -- "$3")"
@@ -38,4 +50,5 @@ exec docker run --rm \
   --input-snapshot /input/snapshot.json \
   --test-set-directory /input/test-set \
   --report /output/report.json \
-  --expected-commit "$COMMIT"
+  --expected-commit "$COMMIT" \
+  "${MODE_ARGS[@]}"

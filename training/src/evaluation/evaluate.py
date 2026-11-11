@@ -1,4 +1,4 @@
-"""Evaluate logged candidate and fixed champion using the persisted test set."""
+"""Evaluate a logged candidate against a fixed champion or bootstrap thresholds."""
 
 import argparse
 import json
@@ -8,7 +8,7 @@ from pathlib import Path
 from common.test_set_persistence import load_test_set
 
 import mlflow
-from evaluation.comparison import evaluate_candidate
+from evaluation.comparison import evaluate_bootstrap, evaluate_candidate
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -18,11 +18,17 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--test-set-directory", type=Path, required=True)
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--expected-commit", required=True)
+    parser.add_argument("--bootstrap", action="store_true")
     return parser.parse_args()
 
 
 def evaluate_training(
-    training_result: Path, input_snapshot: Path, test_set_directory: Path, report_path: Path, expected_commit: str
+    training_result: Path,
+    input_snapshot: Path,
+    test_set_directory: Path,
+    report_path: Path,
+    expected_commit: str,
+    bootstrap: bool = False,
 ) -> dict:
     # Bind local inputs to the workflow commit and reject stale output.
     if report_path.exists():
@@ -32,6 +38,10 @@ def evaluate_training(
     candidate = {key: result[key] for key in ("run_id", "model_uri", "git_commit")}
     if candidate["git_commit"] != expected_commit or snapshot["git_commit"] != expected_commit:
         raise ValueError("Evaluation inputs do not match the workflow commit.")
+    if snapshot["mode"] != ("bootstrap" if bootstrap else "relative"):
+        raise ValueError("Snapshot mode does not match the explicit evaluation mode.")
+    if (snapshot["champion"] is None) != bootstrap:
+        raise ValueError("Champion reference is inconsistent with the evaluation mode.")
 
     # Require a finished training run with the expected dataset provenance.
     client = mlflow.MlflowClient()
@@ -51,11 +61,14 @@ def evaluate_training(
     if logged_model.source_run_id != candidate["run_id"]:
         raise ValueError("Candidate model does not belong to the supplied training run.")
 
-    # Compare both models on the verified persisted test set, without preprocessing.
+    # Apply the explicit gate on the verified persisted test set, without preprocessing.
     features, target = load_test_set(test_set_directory, result["test_set_manifest"], candidate, snapshot)
-    report = evaluate_candidate(
-        candidate, snapshot["champion"], result["test_set_manifest"]["test_set"], features, target
-    )
+    if bootstrap:
+        report = evaluate_bootstrap(candidate, result["test_set_manifest"]["test_set"], features, target)
+    else:
+        report = evaluate_candidate(
+            candidate, snapshot["champion"], result["test_set_manifest"]["test_set"], features, target
+        )
 
     # Persist either gate outcome without reopening the finished training run.
     client.log_dict(candidate["run_id"], report, "evaluation/report.json")
@@ -69,12 +82,18 @@ def main() -> None:
     args = parse_arguments()
     mlflow.set_tracking_uri(os.environ["MLFLOW_TRACKING_URI"])
     report = evaluate_training(
-        args.training_result, args.input_snapshot, args.test_set_directory, args.report, args.expected_commit
+        args.training_result,
+        args.input_snapshot,
+        args.test_set_directory,
+        args.report,
+        args.expected_commit,
+        bootstrap=args.bootstrap,
     )
 
     # Reject the workflow step only after the negative report has been saved.
     if not report["passed"]:
-        raise SystemExit("Evaluation rejected: candidate RMSE exceeds champion RMSE.")
+        reason = "bootstrap thresholds not met" if args.bootstrap else "candidate RMSE exceeds champion RMSE"
+        raise SystemExit(f"Evaluation rejected: {reason}.")
 
 
 if __name__ == "__main__":

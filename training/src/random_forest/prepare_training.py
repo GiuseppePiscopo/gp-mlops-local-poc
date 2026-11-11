@@ -1,4 +1,4 @@
-"""Acquire the champion reference and a CSV copy before training."""
+"""Acquire the champion reference or confirmed absence, and a CSV copy before training."""
 
 import argparse
 import json
@@ -16,6 +16,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--output-directory", type=Path, required=True)
     parser.add_argument("--registered-model", required=True)
     parser.add_argument("--git-commit", required=True)
+    parser.add_argument("--bootstrap", action="store_true", help="Require an absent champion for initial evaluation.")
     return parser.parse_args()
 
 
@@ -28,6 +29,7 @@ def main() -> None:
         args.training_data,
         args.output_directory,
         args.git_commit,
+        bootstrap=args.bootstrap,
     )
     print(json.dumps(snapshot, indent=2))
 

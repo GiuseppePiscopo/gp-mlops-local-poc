@@ -6,6 +6,22 @@ import mlflow.sklearn
 import pandas as pd
 from common import training_utils
 
+BOOTSTRAP_THRESHOLDS = {"r2_min": 0.80, "rmse_max": 300.0}
+
+
+def evaluate_bootstrap(candidate: dict, test_set: dict, features: pd.DataFrame, target: pd.Series) -> dict:
+    metrics = evaluate_model(candidate["model_uri"], features, target)
+    return {
+        "mode": "bootstrap",
+        "candidate": candidate,
+        "champion": None,
+        "test_set": test_set,
+        "candidate_metrics": metrics,
+        "thresholds": dict(BOOTSTRAP_THRESHOLDS),
+        "passed": metrics["r2"] >= BOOTSTRAP_THRESHOLDS["r2_min"]
+        and metrics["rmse"] <= BOOTSTRAP_THRESHOLDS["rmse_max"],
+    }
+
 
 def evaluate_model(model_uri: str, features: pd.DataFrame, target: pd.Series) -> dict[str, float]:
     model = mlflow.sklearn.load_model(model_uri)
