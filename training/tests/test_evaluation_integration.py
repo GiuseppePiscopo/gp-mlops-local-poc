@@ -82,10 +82,12 @@ class EvaluationIntegrationTests(unittest.TestCase):
                     with (
                         patch.object(train, "train_model", side_effect=mutate_after_training),
                         patch.object(train, "snapshot_champion", side_effect=AssertionError("Alias reread")),
+                        patch.object(train, "test_set_identity", side_effect=AssertionError("Identity recalculated")),
                     ):
                         train.main(args)
                     result = json.loads(args.result_json.read_text())
                     report = result["evaluation"]
+                    self.assertEqual(report["test_set"], result["test_set_manifest"]["test_set"])
                     self.assertTrue(report["passed"])
                     self.assertEqual(report["candidate_metrics"], report["champion_metrics"])
                     self.assertEqual(report["test_set"]["dataset_sha256"], hashlib.sha256(original_bytes).hexdigest())
@@ -95,7 +97,6 @@ class EvaluationIntegrationTests(unittest.TestCase):
                         {a.path for a in client.list_artifacts(result["run_id"], "evaluation")},
                         {
                             "evaluation/champion-snapshot.json",
-                            "evaluation/test-set.json",
                             "evaluation/report.json",
                             "evaluation/input-snapshot.json",
                             "evaluation/test-set-manifest.json",

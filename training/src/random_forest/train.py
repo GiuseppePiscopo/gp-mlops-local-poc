@@ -211,11 +211,8 @@ def main(args: argparse.Namespace) -> None:
 
         df = pd.read_csv(BytesIO(dataset_bytes)) if dataset_bytes is not None else get_data(args.training_data)
         X_train, X_test, y_train, y_test = prepare_data(df)
-        test_set = {}
         if champion is not None:
-            test_set = test_set_identity(dataset_tags["dataset.sha256"], X_test, y_test)
             mlflow.log_dict(champion, "evaluation/champion-snapshot.json")
-            mlflow.log_dict(test_set, "evaluation/test-set.json")
 
         mlflow.log_params(
             {
@@ -273,6 +270,11 @@ def main(args: argparse.Namespace) -> None:
             mlflow.log_dict(manifest, "evaluation/test-set-manifest.json")
             result["test_set_manifest"] = manifest
         if champion is not None:
+            test_set = (
+                manifest["test_set"]
+                if input_snapshot is not None
+                else test_set_identity(dataset_tags["dataset.sha256"], X_test, y_test)
+            )
             candidate = {key: result[key] for key in ("run_id", "model_uri", "git_commit")}
             report = evaluate_candidate(candidate, champion, test_set, X_test, y_test)
             mlflow.log_dict(report, "evaluation/report.json")
