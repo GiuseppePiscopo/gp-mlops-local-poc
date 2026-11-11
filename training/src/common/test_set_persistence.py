@@ -6,10 +6,32 @@ from pathlib import Path
 
 import pandas as pd
 
-from common.evaluation import test_set_identity
+from common import training_utils
 
 DATA_FILENAME = "test-data.json"
 MANIFEST_FILENAME = "test-set-manifest.json"
+
+
+def test_set_identity(dataset_sha256: str, features: pd.DataFrame, target: pd.Series) -> dict:
+    values = pd.concat([features, target], axis=1)
+    return {
+        "dataset_sha256": dataset_sha256,
+        "random_seed": training_utils.RANDOM_SEED,
+        "test_size": training_utils.TEST_SIZE,
+        "preprocessing_sha256": hashlib.sha256(Path(training_utils.__file__).read_bytes()).hexdigest(),
+        "feature_names": features.columns.tolist(),
+        "feature_dtypes": [str(dtype) for dtype in features.dtypes],
+        "feature_columns_name": features.columns.name,
+        "target_name": target.name,
+        "target_dtype": str(target.dtype),
+        "index_name": features.index.name,
+        "index_dtype": str(features.index.dtype),
+        "test_row_indices": features.index.tolist(),
+        "test_values_sha256": hashlib.sha256(
+            pd.util.hash_pandas_object(values, index=True).values.tobytes()
+        ).hexdigest(),
+        "test_rows": len(features),
+    }
 
 
 def snapshot_checksum(snapshot: dict) -> str:

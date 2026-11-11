@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pandas as pd
 from common.test_set_persistence import save_test_set
-from random_forest import evaluate
+from evaluation import evaluate
 
 
 class EvaluateTrainingTests(unittest.TestCase):

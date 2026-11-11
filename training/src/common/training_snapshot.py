@@ -5,11 +5,25 @@ import json
 import re
 from pathlib import Path
 
-from common.evaluation import snapshot_champion
 from mlflow import MlflowClient
 
 DATASET_FILENAME = "SeoulBikeData.csv"
 SNAPSHOT_FILENAME = "snapshot.json"
+
+
+def snapshot_champion(client: MlflowClient, registered_model: str) -> dict:
+    version = client.get_model_version_by_alias(registered_model, "champion")
+    if version.status != "READY" or not version.run_id or not version.source:
+        raise ValueError("Champion must be READY with a source run and model URI.")
+    if client.get_run(version.run_id).info.status != "FINISHED":
+        raise ValueError("Champion source run must be FINISHED.")
+    return {
+        "registered_model": registered_model,
+        "version": str(version.version),
+        "run_id": version.run_id,
+        "source": version.source,
+        "model_uri": f"models:/{registered_model}/{version.version}",
+    }
 
 
 def prepare_snapshot(

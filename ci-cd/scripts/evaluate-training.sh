@@ -33,7 +33,7 @@ exec docker run --rm \
   --mount "type=bind,src=$TEST_SET_DIRECTORY,dst=/input/test-set,readonly" \
   --mount "type=bind,src=$REPORT_DIRECTORY,dst=/output" \
   --entrypoint python \
-  "$IMAGE" -m random_forest.evaluate \
+  "$IMAGE" -m evaluation.evaluate \
   --training-result /input/training.json \
   --input-snapshot /input/snapshot.json \
   --test-set-directory /input/test-set \

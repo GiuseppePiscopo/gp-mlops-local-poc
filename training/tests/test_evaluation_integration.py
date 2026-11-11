@@ -13,7 +13,8 @@ import numpy as np
 import pandas as pd
 from common.test_set_persistence import load_test_set
 from common.training_snapshot import DATASET_FILENAME, SNAPSHOT_FILENAME, prepare_snapshot
-from random_forest import evaluate, train
+from evaluation import evaluate
+from random_forest import train
 
 import mlflow
 
@@ -129,7 +130,7 @@ class EvaluationIntegrationTests(unittest.TestCase):
                         [
                             sys.executable,
                             "-m",
-                            "random_forest.evaluate",
+                            "evaluation.evaluate",
                             "--training-result",
                             str(args.result_json),
                             "--input-snapshot",

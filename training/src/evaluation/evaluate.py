@@ -5,10 +5,10 @@ import json
 import os
 from pathlib import Path
 
-from common.evaluation import evaluate_candidate
 from common.test_set_persistence import load_test_set
 
 import mlflow
+from evaluation.comparison import evaluate_candidate
 
 
 def parse_arguments() -> argparse.Namespace:
