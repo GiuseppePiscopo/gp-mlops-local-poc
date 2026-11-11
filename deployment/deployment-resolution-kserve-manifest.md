@@ -335,7 +335,7 @@ Ispezionare manifest e lock:
 
 ```bash
 grep -E \
-  'requested-version|resolved-version|source-run-id|resolved-storage-uri|storageUri' \
+  'requested-alias|requested-version|resolved-version|source-run-id|resolved-storage-uri|storageUri' \
   "/opt/mlops-local-poc/deployment/rendered/gp-mof-capstone-model-v${MODEL_VERSION}.yaml"
 
 cat "/opt/mlops-local-poc/deployment/rendered/gp-mof-capstone-model-v${MODEL_VERSION}.resolution.json"

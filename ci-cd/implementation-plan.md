@@ -97,9 +97,14 @@ le evidenze sono in [design.md](design.md); la procedura operativa in costruzion
   aggiungere agli output la versione esatta per il job di deploy.
 - [x] Estendere resolver, CLI, lock e documentazione per versione esplicita,
   preservando il rendering manuale per alias.
-- [ ] Definire serializzazione dei deploy e rifiuto dei rilasci obsoleti
+- [x] Definire serializzazione dei deploy e rifiuto dei rilasci obsoleti
   approvati fuori ordine, includendo il caso bootstrap.
 - [ ] Configurare environment production con approval e job deploy dipendente.
+- [ ] Prima di abilitare modifiche al servizio, implementare concurrency e
+  controllo champion post-approval secondo
+  [Serializzazione e approvazioni fuori ordine](design.md#serializzazione-e-approvazioni-fuori-ordine).
+  Verificare con test isolati champion invariato, cambiato, assente, errori
+  Registry e bootstrap con champion comparso.
 - [ ] Renderizzare la versione esatta, caricare runtime in KinD e applicare
   risorse/InferenceService.
 - [ ] Attendere readiness, provare inferenza e aggiornare champion solo al successo.

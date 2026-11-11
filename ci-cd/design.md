@@ -171,11 +171,47 @@ il percorso non orchestrato deve restare utilizzabile.
   mantenendo l'uso manuale per alias. Lock con distinzione della selezione,
   versione, run sorgente e URI S3 concreti. Smoke test e promozione champion
   devono riferirsi alla versione distribuita.
-- Restano da definire serializzazione dei deploy e trattamento dei run
-  approvati fuori ordine: passare una versione esatta non impedisce da solo a
-  un vecchio run di sovrascrivere un rilascio più recente.
 - Gli output GitHub identificano il passaggio, non sono una barriera di
   sicurezza contro codice PR non fidato sul runner.
+
+### Serializzazione e approvazioni fuori ordine
+
+- Il job deploy usa un gruppo GitHub Actions `concurrency` stabile per modello
+  e ambiente, condiviso da deploy ordinari e Initial model only. Non includere
+  commit, branch, run ID o modalita nel gruppo. Impostare
+  `cancel-in-progress: false` e `queue: max`: un solo deploy in esecuzione,
+  senza sostituire automaticamente l'unico job in attesa con un nuovo arrivo.
+  La coda resta soggetta ai limiti GitHub e non garantisce l'ordine dei
+  workflow originari o delle approval.
+- La sezione serializzata comprende i controlli dopo approval, il rendering,
+  il caricamento del runtime, l'applicazione delle risorse, readiness,
+  inferenza e aggiornamento di champion. Non serializzare l'intero workflow
+  durante training o attesa dell'approval.
+- Dopo approval e prima di modificare il servizio, nel percorso ordinario
+  rileggere champion e confrontarne modello, versione, run sorgente e source
+  con il riferimento fissato nello snapshot di training e nel report.
+  Questa lettura verifica l'attualita del confronto: non sostituisce lo
+  snapshot, non ripete l'evaluation e non seleziona il modello da distribuire.
+- Champion assente o diverso dal riferimento rende il rilascio obsoleto:
+  fallire esplicitamente prima del deploy, riportando riferimento valutato
+  e riferimento corrente. Richiedere una nuova esecuzione con snapshot,
+  evaluation e approval nuovi. Errori di lettura Registry bloccano comunque
+  il deploy, senza considerarli assenza o consentire fallback.
+- In Initial model only verificare invece che champion sia ancora assente,
+  come previsto dal contratto bootstrap. Se e comparso, fallire e richiedere
+  una nuova esecuzione ordinaria.
+- Esempio: A e B sono valutati contro champion V1; B viene distribuito e
+  promuove V3. Una successiva approval di A non puo distribuire V2, perche
+  V1 non e piu il champion corrente. Il numero della versione, il commit e
+  l'alias candidate non sostituiscono questo controllo.
+- Il gruppo protegge i job che lo adottano nello stesso repository, non le
+  operazioni CLI esterne. Non eseguire deploy o modifiche manuali a champion
+  durante un deploy della pipeline. Il controllo seguito dalla promozione
+  non e una compare-and-swap atomica del Registry.
+- Un errore dopo l'applicazione puo lasciare il servizio modificato anche se
+  champion resta invariato: questa politica non introduce rollback automatico.
+  Prima di riprendere i deploy occorre verificare e ripristinare manualmente
+  la coerenza tra servizio e champion.
 
 ## Confronto e prove PR
 
