@@ -23,11 +23,9 @@ operativa in costruzione è [github-actions-self-hosted-wsl.md](github-actions-s
   kind load docker-image per MLServer.
 - Environment GitHub production con approval manuale prima del deploy.
   Repository pubblico per rendere disponibili Required reviewers sul piano
-  corrente. Environment verificato via API il 2026-11-11: reviewer
-  `GiuseppePiscopo`, self-review consentita per il laboratorio mono-utente,
-  bypass amministratore disabilitato e unica regola di deployment per il
-  branch `main`, senza tag. Il job deploy deve ancora essere collegato
-  all'environment; il workflow attuale non impone ancora questa approval.
+  corrente. Self-review consentita per il laboratorio mono-utente,
+  bypass amministratore disabilitato e deployment consentito soltanto dal
+  branch `main`, senza tag.
   La [documentazione GitHub](https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments#required-reviewers)
   limita Required reviewers ai repository pubblici sui piani Free/Pro/Team.
 - Conservare alias MLflow baseline/candidate/champion; niente tag Azure
@@ -54,11 +52,10 @@ operativa in costruzione è [github-actions-self-hosted-wsl.md](github-actions-s
   codice, workflow e dipendenze fidati. Questi filtri non isolano la macchina
   e non proteggono da modifiche malevole dei workflow.
 - Nel repository pubblico richiedere approval dei workflow per tutti i
-  contributori esterni (`all_external_contributors`, verificato via API).
+  contributori esterni.
   Non approvare workflow di PR esterne: la PR puo modificare anche il filtro
   nel workflow. L'approval di `production` non protegge il job training.
-- La restrizione di `production` a `main` non è una branch protection:
-  alla verifica API del 2026-11-11 `main` non risulta protetto. Non presumere
+- La restrizione di `production` a `main` non è una branch protection. Non presumere
   obblighi di review o controlli sui push derivanti dall'environment.
 - Dichiarare `permissions: contents: read` nei workflow e
   `persist-credentials: false` nel checkout. Non concedere scrittura sul

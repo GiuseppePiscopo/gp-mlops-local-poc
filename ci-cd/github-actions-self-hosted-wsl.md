@@ -282,3 +282,19 @@ Nella sezione **Artifacts** del riepilogo dell'esecuzione GitHub, scaricare
   modello `gp-mof-capstone-model`, versione registrata e `status` uguale a `READY`.
 
 Atteso: l'archivio contiene soltanto i quattro JSON, senza `test-data.json`.
+
+## Approvare l'esecuzione production
+
+Nel dettaglio dell'esecuzione GitHub, verificare che **Train and evaluate**
+sia completato con successo e **Deploy (approval only)** sia in attesa di
+review per l'environment `production`.
+
+Aprire **Review deployments**, selezionare `production` e premere
+**Approve and deploy**.
+
+Verificare il successo del job **Deploy (approval only)** e, nel Summary,
+la sezione **Production approval**:
+
+- modello e versione uguali alla sezione **Model registration**;
+- run sorgente, URI del modello e commit uguali alla sezione **Training result**;
+- indicazione che il job non ha modificato risorse del cluster o alias.

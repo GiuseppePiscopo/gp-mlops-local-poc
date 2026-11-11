@@ -165,7 +165,7 @@ jobs:
           printf '%s\n' \
             '## Pipeline scope' \
             '' \
-            'Training and evaluation completed. Registration runs only after a successful gate on main/manual runs. Deployment is not implemented yet.' \
+            'Training and evaluation completed. Registration runs only after a successful gate on main/manual runs. Production approval is handled by the dependent job; deployment is not implemented yet.' \
             >> "$GITHUB_STEP_SUMMARY"
 
       - name: Clean ephemeral test set
@@ -174,3 +174,48 @@ jobs:
           python3 "$GIT_REPOSITORY/ci-cd/scripts/clean-test-set.py" \
             --runner-temp "$RUNNER_TEMP" \
             --workspace "$TEST_SET_WORKSPACE"
+
+  deploy:
+    name: Deploy (approval only)
+    needs: train-and-evaluate
+    if: >-
+      success() &&
+      needs.train-and-evaluate.outputs.evaluation_passed == 'true' &&
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    environment: production
+    runs-on: [self-hosted, Linux, X64, mlops-local]
+    timeout-minutes: 5
+    defaults:
+      run:
+        shell: bash
+    env:
+      MODEL_RUN_ID: ${{ needs.train-and-evaluate.outputs.run_id }}
+      MODEL_URI: ${{ needs.train-and-evaluate.outputs.model_uri }}
+      MODEL_COMMIT: ${{ needs.train-and-evaluate.outputs.git_commit }}
+      REGISTERED_MODEL: ${{ needs.train-and-evaluate.outputs.registered_model }}
+      MODEL_VERSION: ${{ needs.train-and-evaluate.outputs.model_version }}
+    steps:
+      - name: Report approved deployment target
+        run: |
+          set -euo pipefail
+          : "${MODEL_RUN_ID:?Missing source run ID}"
+          : "${MODEL_URI:?Missing logged model URI}"
+          : "${MODEL_COMMIT:?Missing model commit}"
+          : "${REGISTERED_MODEL:?Missing registered model}"
+          : "${MODEL_VERSION:?Missing registered model version}"
+          if [[ ! "$MODEL_VERSION" =~ ^[1-9][0-9]*$ || "$MODEL_COMMIT" != "$GITHUB_SHA" ]]; then
+            echo "Invalid registered model version or mismatched workflow commit." >&2
+            exit 1
+          fi
+          printf '%s\n' \
+            '## Production approval' \
+            '' \
+            "- Registered model: \`$REGISTERED_MODEL\`" \
+            "- Model version: \`$MODEL_VERSION\`" \
+            "- Source run: \`$MODEL_RUN_ID\`" \
+            "- Model URI: \`$MODEL_URI\`" \
+            "- Commit: \`$MODEL_COMMIT\`" \
+            '' \
+            'Approval completed. Deployment is not implemented yet; no cluster resources or model aliases were changed by this job.' \
+            >> "$GITHUB_STEP_SUMMARY"
