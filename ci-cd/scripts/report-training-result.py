@@ -9,6 +9,7 @@ from pathlib import Path
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--result", type=Path, required=True)
+    parser.add_argument("--evaluation", type=Path, required=True)
     parser.add_argument("--summary", type=Path, required=True)
     return parser.parse_args()
 
@@ -17,7 +18,9 @@ def main() -> None:
     args = parse_arguments()
     result = json.loads(args.result.read_text(encoding="utf-8"))
     identifiers = {key: result[key] for key in ("run_id", "model_uri", "git_commit")}
-    report = result["evaluation"]
+    report = json.loads(args.evaluation.read_text(encoding="utf-8"))
+    if report["candidate"] != identifiers:
+        raise ValueError("Evaluation report does not match the training result.")
     text = (
         "## Training result\n\n```json\n"
         + json.dumps(identifiers, indent=2)

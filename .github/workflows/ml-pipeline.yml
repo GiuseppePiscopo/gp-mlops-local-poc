@@ -31,6 +31,7 @@ jobs:
       TRAINING_RESULT: training-${{ github.run_id }}-${{ github.run_attempt }}.json
       TRAINING_SNAPSHOT: snapshot-${{ github.run_id }}-${{ github.run_attempt }}
       TEST_SET_WORKSPACE: test-set-${{ github.run_id }}-${{ github.run_attempt }}
+      EVALUATION_DIRECTORY: evaluation-${{ github.run_id }}-${{ github.run_attempt }}
       TRAINING_DATA_HOST_PATH: /opt/mlops-local-poc/training/data/input/SeoulBikeData.csv
       DOCKER_NETWORK: mlops-local-network
       MLFLOW_TRACKING_URI: http://mlflow:5000
@@ -73,7 +74,6 @@ jobs:
           unset IMAGE_TAG
           python3 "$GIT_REPOSITORY/training/scripts/run_training.py" \
             --skip-registration \
-            --evaluate-champion \
             --training-data "$RUNNER_TEMP/$TRAINING_SNAPSHOT/SeoulBikeData.csv" \
             --input-snapshot "$RUNNER_TEMP/$TRAINING_SNAPSHOT/snapshot.json" \
             --test-set-directory "$RUNNER_TEMP/$TEST_SET_WORKSPACE/data" \
@@ -81,12 +81,22 @@ jobs:
             --n-estimators 100 \
             --max-depth 10
 
+      - name: Evaluate candidate against fixed champion
+        id: evaluation
+        run: |
+          bash "$GIT_REPOSITORY/ci-cd/scripts/evaluate-training.sh" \
+            "$RUNNER_TEMP/$TRAINING_RESULT" \
+            "$RUNNER_TEMP/$TRAINING_SNAPSHOT/snapshot.json" \
+            "$RUNNER_TEMP/$TEST_SET_WORKSPACE/data" \
+            "$RUNNER_TEMP/$EVALUATION_DIRECTORY"
+
       - name: Report training and evaluation
-        if: ${{ !cancelled() && steps.training.outcome != 'skipped' }}
+        if: ${{ !cancelled() && steps.evaluation.outcome != 'skipped' }}
         run: |
           set -euo pipefail
           python3 "$GIT_REPOSITORY/ci-cd/scripts/report-training-result.py" \
             --result "$RUNNER_TEMP/$TRAINING_RESULT" \
+            --evaluation "$RUNNER_TEMP/$EVALUATION_DIRECTORY/report.json" \
             --summary "$GITHUB_STEP_SUMMARY"
 
       - name: Report pipeline scope

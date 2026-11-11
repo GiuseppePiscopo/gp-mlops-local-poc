@@ -84,7 +84,7 @@ le evidenze sono in [design.md](design.md); la procedura operativa in costruzion
     ordine e tipi in storage effimero del runner, con pulizia a fine job;
     conservare in MLflow solo manifest, identità e checksum associati al run
     e al dataset iniziale.
-  - [ ] Eseguire il gate in uno script dedicato nella stessa immagine training,
+  - [x] Eseguire il gate in uno script dedicato nella stessa immagine training,
     usando risultati espliciti del training, snapshot champion e test set verificato;
     non rileggere alias o CSV runtime e non ripetere split/preprocessing.
   - [ ] Aggiornare launcher, workflow e test; verificare alterazioni di CSV/test set,

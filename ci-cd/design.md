@@ -201,9 +201,15 @@ il percorso non orchestrato deve restare utilizzabile.
   il checksum non ne garantisce la recuperabilità.
 - L'evaluation riceve JSON del candidato, snapshot champion e test set;
   verifica coerenza e checksum prima di misurare entrambi i modelli.
+  Richiede il run di training FINISHED, commit e hash del CSV coerenti con
+  lo snapshot e appartenenza del modello loggato a quel run esatto.
   Non ripete split o preprocessing e non accetta nuovi hash come sostituti
   dei valori attesi. File mancanti, alterazioni o riferimenti incoerenti
   causano errore esplicito.
+- Il training non applica il gate. L'evaluation salva report separato e
+  artifact nello stesso run, senza riaprirlo; un gate negativo fa fallire
+  soltanto lo step di evaluation. Il riepilogo legge entrambi i risultati
+  e viene prodotto anche per un confronto concluso con esito negativo.
 - Report con identità di modelli/test set, entrambi i RMSE ed esito. Lo
   snapshot non garantisce che champion sia ancora servito al momento del deploy.
 - Nuovo push/workflow o riesecuzione job acquisisce un nuovo snapshot;

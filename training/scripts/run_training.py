@@ -51,7 +51,6 @@ class RunContext:
     git_remote: str
     git_dirty: str
     skip_registration: bool
-    evaluate_champion: bool
     input_snapshot: Path | None
 
 
@@ -115,9 +114,6 @@ def parse_args() -> argparse.Namespace:
         help="Log the model without creating a Model Registry version.",
     )
     parser.add_argument("--result-json", type=Path, help="Save the completed training identifiers to this JSON file.")
-    parser.add_argument(
-        "--evaluate-champion", action="store_true", help="Apply the relative RMSE gate against champion."
-    )
     parser.add_argument("--input-snapshot", type=Path, help="Use the prepared dataset and champion snapshot.")
     parser.add_argument("--test-set-directory", type=Path, help="Export the test set to an ephemeral directory.")
     parser.add_argument(
@@ -245,10 +241,8 @@ def get_image_identity(git_repository: Path, image_tag: str | None) -> dict:
 
 
 def resolve_run_context(args: argparse.Namespace) -> RunContext:
-    if args.input_snapshot is not None and not args.evaluate_champion:
-        raise PreRunValidationError("--input-snapshot requires --evaluate-champion.")
-    if args.evaluate_champion and (not args.skip_registration or args.result_json is None):
-        raise PreRunValidationError("--evaluate-champion requires --skip-registration and --result-json.")
+    if args.input_snapshot is not None and (not args.skip_registration or args.result_json is None):
+        raise PreRunValidationError("--input-snapshot requires --skip-registration and --result-json.")
     training_data = require_value(
         args.training_data,
         "--training-data / TRAINING_DATA_HOST_PATH",
@@ -314,7 +308,6 @@ def resolve_run_context(args: argparse.Namespace) -> RunContext:
         git_remote=git_metadata["remote"],
         git_dirty=git_metadata["dirty"],
         skip_registration=args.skip_registration,
-        evaluate_champion=args.evaluate_champion,
         input_snapshot=input_snapshot,
     )
 
@@ -371,8 +364,6 @@ def build_docker_command(
 
     if run_context.skip_registration:
         command.append("--skip_registration")
-    if run_context.evaluate_champion:
-        command.append("--evaluate_champion")
     if run_context.input_snapshot is not None:
         command.extend(["--input_snapshot", CONTAINER_SNAPSHOT_PATH])
     if result_file is not None:
@@ -452,14 +443,7 @@ def execute_training(run_context: RunContext, result_json: Path | None, test_set
 
         docker_command = build_docker_command(run_context, result_file, test_set_directory)
         print_run_summary(run_context, docker_command)
-        exit_code = 0
-        try:
-            execute_docker_command(docker_command)
-        except SystemExit as error:
-            # A rejected gate still exports the completed training and evaluation report.
-            if not result_file.stat().st_size:
-                raise
-            exit_code = error.code
+        execute_docker_command(docker_command)
         result = json.loads(result_file.read_text(encoding="utf-8"))
         if (
             not isinstance(result, dict)
@@ -471,8 +455,6 @@ def execute_training(run_context: RunContext, result_json: Path | None, test_set
             stream.write(json.dumps(result, indent=2) + "\n")
 
     print(f"Training result: {output}")
-    if exit_code:
-        raise SystemExit(exit_code)
 
 
 def main() -> None:

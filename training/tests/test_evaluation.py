@@ -114,10 +114,21 @@ class EvaluationTests(unittest.TestCase):
         script = Path(__file__).resolve().parents[2] / "ci-cd" / "scripts" / "report-training-result.py"
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "result.json"
+            evaluation_report = Path(directory) / "report.json"
             summary = Path(directory) / "summary"
-            source.write_text(json.dumps({**self.candidate, "evaluation": report}))
+            source.write_text(json.dumps(self.candidate))
+            evaluation_report.write_text(json.dumps(report))
             subprocess.run(
-                [sys.executable, str(script), "--result", str(source), "--summary", str(summary)],
+                [
+                    sys.executable,
+                    str(script),
+                    "--result",
+                    str(source),
+                    "--evaluation",
+                    str(evaluation_report),
+                    "--summary",
+                    str(summary),
+                ],
                 check=True,
             )
             text = summary.read_text()

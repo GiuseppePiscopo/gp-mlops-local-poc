@@ -32,7 +32,6 @@ class TrainingRegistrationTests(unittest.TestCase):
                     skip_registration=skip,
                     fail_for_alert_test=False,
                     result_json=output,
-                    evaluate_champion=False,
                     input_snapshot=None,
                     test_set_directory=None,
                 )
@@ -94,7 +93,6 @@ class TrainingRegistrationTests(unittest.TestCase):
             skip_registration=True,
             fail_for_alert_test=False,
             result_json=None,
-            evaluate_champion=False,
             input_snapshot=None,
             test_set_directory=None,
         )
@@ -183,14 +181,13 @@ class TrainingRegistrationTests(unittest.TestCase):
                 execute.assert_not_called()
             self.assertEqual(existing.read_text(), "previous")
 
-    def test_gate_failure_exports_result_and_preserves_nonzero_exit(self):
+    def test_container_failure_does_not_export_success_shaped_result(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             context = MagicMock(
                 git_commit="a" * 40,
                 git_repository_path=root / "checkout",
                 skip_registration=True,
-                evaluate_champion=True,
                 image_digest="",
                 input_snapshot=None,
             )
@@ -206,7 +203,6 @@ class TrainingRegistrationTests(unittest.TestCase):
                     v for v in command if isinstance(v, str) and v.endswith(f"dst={launcher.CONTAINER_RESULT_PATH}")
                 )
                 Path(mount.split("src=", 1)[1].split(",dst=", 1)[0]).write_text(json.dumps(result))
-                self.assertIn("--evaluate_champion", command)
                 raise SystemExit(1)
 
             output = root / "result.json"
@@ -214,7 +210,7 @@ class TrainingRegistrationTests(unittest.TestCase):
                 with self.assertRaises(SystemExit) as failure:
                     launcher.execute_training(context, output)
             self.assertEqual(failure.exception.code, 1)
-            self.assertEqual(json.loads(output.read_text()), result)
+            self.assertFalse(output.exists())
 
 
 if __name__ == "__main__":

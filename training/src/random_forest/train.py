@@ -18,7 +18,6 @@ from pathlib import Path
 
 import mlflow.sklearn
 import pandas as pd
-from common.evaluation import evaluate_candidate, snapshot_champion, test_set_identity
 from common.test_set_persistence import save_test_set
 from common.training_snapshot import load_snapshot
 from common.training_utils import RANDOM_SEED, TEST_SIZE, eval_model, get_data, prepare_data
@@ -64,7 +63,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--result_json", type=Path, help="Write the completed run and logged model identifiers as JSON."
     )
-    parser.add_argument("--evaluate_champion", action="store_true", help="Compare against a fixed champion snapshot.")
     parser.add_argument("--input_snapshot", type=Path, help="Use a previously acquired dataset and champion snapshot.")
     parser.add_argument("--test_set_directory", type=Path, help="Write the test set to this ephemeral directory.")
     parser.add_argument(
@@ -155,10 +153,10 @@ def train_model(
 def main(args: argparse.Namespace) -> None:
     if args.input_snapshot is not None and args.test_set_directory is None:
         raise ValueError("--input_snapshot requires --test_set_directory.")
-    if args.input_snapshot is not None and not args.evaluate_champion:
-        raise ValueError("--input_snapshot requires --evaluate_champion.")
-    if args.evaluate_champion and (not args.skip_registration or args.result_json is None):
-        raise ValueError("Champion evaluation requires --skip_registration and --result_json.")
+    if args.input_snapshot is not None and (not args.skip_registration or args.result_json is None):
+        raise ValueError("Snapshot training requires --skip_registration and --result_json.")
+    if args.test_set_directory is not None and args.input_snapshot is None:
+        raise ValueError("--test_set_directory requires --input_snapshot.")
     if args.fail_for_alert_test:
         raise RuntimeError("ALERT TEST: intentional training job failure")
 
@@ -172,21 +170,16 @@ def main(args: argparse.Namespace) -> None:
     )
 
     mlflow.set_tracking_uri(tracking_uri)
-    champion = None
     dataset_bytes = None
     input_snapshot = None
-    if args.evaluate_champion:
+    if args.input_snapshot is not None:
         dataset_bytes = Path(args.training_data).read_bytes()
-        if args.input_snapshot is not None:
-            input_snapshot = load_snapshot(
-                args.input_snapshot,
-                dataset_bytes,
-                os.environ["GIT_COMMIT"],
-                args.registered_model_name,
-            )
-            champion = input_snapshot["champion"]
-        else:
-            champion = snapshot_champion(mlflow.MlflowClient(), args.registered_model_name)
+        input_snapshot = load_snapshot(
+            args.input_snapshot,
+            dataset_bytes,
+            os.environ["GIT_COMMIT"],
+            args.registered_model_name,
+        )
     mlflow.set_experiment(experiment_name)
 
     with mlflow.start_run() as run:
@@ -198,6 +191,7 @@ def main(args: argparse.Namespace) -> None:
         mlflow.set_tags(dataset_tags)
         if input_snapshot is not None:
             mlflow.log_dict(input_snapshot, "evaluation/input-snapshot.json")
+            mlflow.log_dict(input_snapshot["champion"], "evaluation/champion-snapshot.json")
 
         mlflow.log_params(
             {
@@ -211,8 +205,6 @@ def main(args: argparse.Namespace) -> None:
 
         df = pd.read_csv(BytesIO(dataset_bytes)) if dataset_bytes is not None else get_data(args.training_data)
         X_train, X_test, y_train, y_test = prepare_data(df)
-        if champion is not None:
-            mlflow.log_dict(champion, "evaluation/champion-snapshot.json")
 
         mlflow.log_params(
             {
@@ -269,23 +261,9 @@ def main(args: argparse.Namespace) -> None:
             manifest = save_test_set(args.test_set_directory, X_test, y_test, result.copy(), input_snapshot)
             mlflow.log_dict(manifest, "evaluation/test-set-manifest.json")
             result["test_set_manifest"] = manifest
-        if champion is not None:
-            test_set = (
-                manifest["test_set"]
-                if input_snapshot is not None
-                else test_set_identity(dataset_tags["dataset.sha256"], X_test, y_test)
-            )
-            candidate = {key: result[key] for key in ("run_id", "model_uri", "git_commit")}
-            report = evaluate_candidate(candidate, champion, test_set, X_test, y_test)
-            mlflow.log_dict(report, "evaluation/report.json")
-            mlflow.set_tag("evaluation.passed", str(report["passed"]).lower())
-            result["evaluation"] = report
 
     if args.result_json is not None:
         args.result_json.write_text(json.dumps(result, indent=2, allow_nan=False) + "\n", encoding="utf-8")
-    if champion is not None and not result["evaluation"]["passed"]:
-        print("Evaluation rejected: candidate RMSE exceeds champion RMSE.")
-        raise SystemExit(1)
 
 
 if __name__ == "__main__":

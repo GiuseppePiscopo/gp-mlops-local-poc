@@ -2,6 +2,8 @@ import argparse
 import hashlib
 import json
 import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -11,7 +13,7 @@ import numpy as np
 import pandas as pd
 from common.test_set_persistence import load_test_set
 from common.training_snapshot import DATASET_FILENAME, SNAPSHOT_FILENAME, prepare_snapshot
-from random_forest import train
+from random_forest import evaluate, train
 
 import mlflow
 
@@ -51,7 +53,6 @@ class EvaluationIntegrationTests(unittest.TestCase):
                     registered_model_name="isolated-model",
                     skip_registration=False,
                     result_json=root / "baseline.json",
-                    evaluate_champion=False,
                     input_snapshot=None,
                     test_set_directory=None,
                     fail_for_alert_test=False,
@@ -70,7 +71,6 @@ class EvaluationIntegrationTests(unittest.TestCase):
                     args.test_set_directory = root / "test-set"
                     args.test_set_directory.mkdir()
                     args.skip_registration = True
-                    args.evaluate_champion = True
                     args.result_json = root / "candidate.json"
                     train_model = train.train_model
 
@@ -81,12 +81,24 @@ class EvaluationIntegrationTests(unittest.TestCase):
 
                     with (
                         patch.object(train, "train_model", side_effect=mutate_after_training),
-                        patch.object(train, "snapshot_champion", side_effect=AssertionError("Alias reread")),
-                        patch.object(train, "test_set_identity", side_effect=AssertionError("Identity recalculated")),
                     ):
                         train.main(args)
                     result = json.loads(args.result_json.read_text())
-                    report = result["evaluation"]
+                    self.assertNotIn("evaluation", result)
+                    self.assertEqual(client.get_run(result["run_id"]).info.status, "FINISHED")
+                    path.unlink()
+                    snapshot_csv = Path(args.training_data)
+                    snapshot_csv.unlink()
+                    evaluation_output = root / "report.json"
+                    # The gate must work after training ends, without the CSV or another split.
+                    with (
+                        patch.object(train, "prepare_data", side_effect=AssertionError("Preprocessing repeated")),
+                        patch.object(client, "get_model_version_by_alias", side_effect=AssertionError("Alias reread")),
+                        patch.object(evaluate.mlflow, "MlflowClient", return_value=client),
+                    ):
+                        report = evaluate.evaluate_training(
+                            args.result_json, args.input_snapshot, args.test_set_directory, evaluation_output, "a" * 40
+                        )
                     self.assertEqual(report["test_set"], result["test_set_manifest"]["test_set"])
                     self.assertTrue(report["passed"])
                     self.assertEqual(report["candidate_metrics"], report["champion_metrics"])
@@ -111,18 +123,64 @@ class EvaluationIntegrationTests(unittest.TestCase):
                     self.assertEqual(len(features), 20)
                     self.assertEqual(features.index.tolist(), report["test_set"]["test_row_indices"])
                     self.assertEqual(len(target), 20)
+                    cli_report = root / "separate-process-report.json"
+                    # The standalone evaluator has no dataset argument and shares only persisted inputs.
+                    subprocess.run(
+                        [
+                            sys.executable,
+                            "-m",
+                            "random_forest.evaluate",
+                            "--training-result",
+                            str(args.result_json),
+                            "--input-snapshot",
+                            str(args.input_snapshot),
+                            "--test-set-directory",
+                            str(args.test_set_directory),
+                            "--report",
+                            str(cli_report),
+                            "--expected-commit",
+                            "a" * 40,
+                        ],
+                        check=True,
+                        capture_output=True,
+                        text=True,
+                    )
+                    self.assertEqual(json.loads(cli_report.read_text()), report)
 
                     path.write_bytes(original_bytes)
+                    snapshot_csv.write_bytes(original_bytes)
+                    snapshot_csv.chmod(0o444)
                     args.n_estimators = 1
                     args.max_depth = 1
                     args.result_json = root / "rejected.json"
                     args.test_set_directory = root / "rejected-test-set"
                     args.test_set_directory.mkdir()
-                    with self.assertRaises(SystemExit) as failure:
-                        train.main(args)
-                    self.assertEqual(failure.exception.code, 1)
+                    train.main(args)
                     rejected = json.loads(args.result_json.read_text())
-                    self.assertFalse(rejected["evaluation"]["passed"])
+                    rejected_report = evaluate.evaluate_training(
+                        args.result_json,
+                        args.input_snapshot,
+                        args.test_set_directory,
+                        root / "rejected-report.json",
+                        "a" * 40,
+                    )
+                    self.assertFalse(rejected_report["passed"])
+                    with (
+                        patch.object(
+                            evaluate,
+                            "parse_arguments",
+                            return_value=argparse.Namespace(
+                                training_result=args.result_json,
+                                input_snapshot=args.input_snapshot,
+                                test_set_directory=args.test_set_directory,
+                                report=root / "rejected-cli-report.json",
+                                expected_commit="a" * 40,
+                            ),
+                        ),
+                        self.assertRaises(SystemExit) as failure,
+                    ):
+                        evaluate.main()
+                    self.assertIn("Evaluation rejected", str(failure.exception))
                     self.assertEqual(client.get_run(rejected["run_id"]).info.status, "FINISHED")
                     self.assertEqual(len(client.search_model_versions("name='isolated-model'")), 1)
                     self.assertEqual(str(client.get_model_version_by_alias("isolated-model", "champion").version), "1")
