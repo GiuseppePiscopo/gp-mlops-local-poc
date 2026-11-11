@@ -22,8 +22,14 @@ operativa in costruzione è [github-actions-self-hosted-wsl.md](github-actions-s
 - Nessun registry immagini iniziale: Docker locale per training/resolver,
   kind load docker-image per MLServer.
 - Environment GitHub production con approval manuale prima del deploy.
-  Verificare in fase di configurazione che le protezioni richieste siano
-  disponibili per piano GitHub e visibilità del repository scelti.
+  Repository pubblico per rendere disponibili Required reviewers sul piano
+  corrente. Environment verificato via API il 2026-11-11: reviewer
+  `GiuseppePiscopo`, self-review consentita per il laboratorio mono-utente,
+  bypass amministratore disabilitato e unica regola di deployment per il
+  branch `main`, senza tag. Il job deploy deve ancora essere collegato
+  all'environment; il workflow attuale non impone ancora questa approval.
+  La [documentazione GitHub](https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments#required-reviewers)
+  limita Required reviewers ai repository pubblici sui piani Free/Pro/Team.
 - Conservare alias MLflow baseline/candidate/champion; niente tag Azure
   staging/production. Baseline è storico, non fallback automatico.
 - Champion viene aggiornato solo dopo readiness e smoke test riusciti.
@@ -31,7 +37,7 @@ operativa in costruzione è [github-actions-self-hosted-wsl.md](github-actions-s
   del manifest; niente rollback automatico.
 - Fuori scope: GitOps Flux/Argo CD, registry locale/remoto, rollout graduale,
   retraining da drift/nuovi dati e modifiche non necessarie a monitoring/alerting.
-- Privacy del repository e filtri sugli autori/eventi riducono l'esposizione,
+- Approval dei workflow esterni e filtri sugli autori/eventi riducono l'esposizione,
   ma non isolano il runner con accesso a Docker e rete locale. Eseguire solo
   codice PR fidato, limitare GITHUB_TOKEN e non usare pull_request_target per
   eseguire il codice della PR.
@@ -47,9 +53,13 @@ operativa in costruzione è [github-actions-self-hosted-wsl.md](github-actions-s
 - L'autore della PR non certifica ogni commit: eseguire solo branch con
   codice, workflow e dipendenze fidati. Questi filtri non isolano la macchina
   e non proteggono da modifiche malevole dei workflow.
-- Mantenere il repository privato. Prima di un eventuale passaggio a pubblico,
-  riesaminare accesso al runner, trigger PR e protezioni disponibili; il
-  filtro sull'autore non rende sicura da solo la pubblicazione.
+- Nel repository pubblico richiedere approval dei workflow per tutti i
+  contributori esterni (`all_external_contributors`, verificato via API).
+  Non approvare workflow di PR esterne: la PR puo modificare anche il filtro
+  nel workflow. L'approval di `production` non protegge il job training.
+- La restrizione di `production` a `main` non è una branch protection:
+  alla verifica API del 2026-11-11 `main` non risulta protetto. Non presumere
+  obblighi di review o controlli sui push derivanti dall'environment.
 - Dichiarare `permissions: contents: read` nei workflow e
   `persist-credentials: false` nel checkout. Non concedere scrittura sul
   repository o approvazione di PR ai job; aggiungere altri permessi soltanto

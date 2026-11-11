@@ -9,7 +9,7 @@ ed evaluation del modello `gp-mof-capstone-model` con MLflow.
 - Ubuntu WSL2 x64, utente non root, Docker Desktop con integrazione WSL;
 - Git, Git LFS, `python3` >= 3.11, `kind`, `kubectl` e `curl` disponibili in WSL;
 - repository già configurato per LFS, con file LFS scaricati;
-- repository GitHub `GiuseppePiscopo/gp-mlops-local-poc` privato, con accesso
+- repository GitHub `GiuseppePiscopo/gp-mlops-local-poc` pubblico, con accesso
   amministratore;
 - [stack MLflow](../mlflow/mlflow-docker-wsl-setup.md) attivo nella rete
   `mlops-local-network`;
@@ -26,6 +26,8 @@ nell'interfaccia GitHub.
 ## Avvertenze operative
 
 - Eseguire sul runner soltanto codice fidato.
+- Non approvare workflow di PR esterne: possono modificare i filtri del
+  workflow ed eseguire codice sul runner self-hosted.
 - Non pubblicare `.env`, kubeconfig, credenziali del runner o contenuti del
   Secret, neppure come log o artifact.
 - Non esportare globalmente `IMAGE_TAG` o `GIT_REPOSITORY` nel runner.
@@ -42,6 +44,29 @@ permissions** e verificare:
 
 Salvare se sono state apportate modifiche. Atteso: permessi predefiniti in
 sola lettura e approvazione delle PR da workflow non consentita.
+
+Nella stessa pagina, in **Fork pull request workflows from outside
+collaborators**, selezionare **Require approval for all outside collaborators**
+e salvare.
+
+## Configurare l'environment production
+
+Aprire **Settings > Environments > New environment**, inserire `production`
+e premere **Configure environment**. Se esiste gia, aprirlo.
+
+In **Deployment protection rules**:
+
+- abilitare **Required reviewers** e aggiungere `GiuseppePiscopo`;
+- lasciare **Prevent self-review** disabilitato;
+- disabilitare **Allow administrators to bypass configured protection rules**;
+- salvare le regole.
+
+In **Deployment branches and tags**, selezionare **Selected branches and tags**
+e aggiungere una sola regola di tipo **Branch** con nome `main`. Non aggiungere
+regole per i tag.
+
+Verificare reviewer, self-review consentita, bypass disabilitato e unica
+regola per il branch `main`. Non aggiungere secrets o variables.
 
 ## Configurare il remote GitHub
 

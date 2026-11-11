@@ -99,7 +99,12 @@ le evidenze sono in [design.md](design.md); la procedura operativa in costruzion
   preservando il rendering manuale per alias.
 - [x] Definire serializzazione dei deploy e rifiuto dei rilasci obsoleti
   approvati fuori ordine, includendo il caso bootstrap.
-- [ ] Configurare environment production con approval e job deploy dipendente.
+- [x] Configurare environment production con approval e restrizione a main;
+  verificare le protezioni dei workflow da PR esterne nel repository pubblico.
+  Vedere [Architettura e perimetro](design.md#architettura-e-perimetro) e
+  [PR fidate e permessi](design.md#pr-fidate-e-permessi).
+- [ ] Aggiungere il job deploy dipendente da training/evaluation e collegato
+  all'environment production, escluso dalle PR e dai gate falliti.
 - [ ] Prima di abilitare modifiche al servizio, implementare concurrency e
   controllo champion post-approval secondo
   [Serializzazione e approvazioni fuori ordine](design.md#serializzazione-e-approvazioni-fuori-ordine).
