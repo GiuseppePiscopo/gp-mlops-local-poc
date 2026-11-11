@@ -30,3 +30,8 @@ spec:
         name: {{ settings.kserve.model_format | tojson }}
       protocolVersion: {{ settings.kserve.protocol_version | tojson }}
       storageUri: {{ resolution.resolved_storage_uri | tojson }}
+      env:
+        - name: MODEL_NAME
+          value: {{ resolution.registered_model | tojson }}
+        - name: MODEL_VERSION
+          value: {{ resolution.resolved_version | tojson }}

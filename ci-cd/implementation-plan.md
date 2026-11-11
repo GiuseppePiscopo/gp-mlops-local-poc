@@ -111,7 +111,7 @@ le evidenze sono in [design.md](design.md); la procedura operativa in costruzion
   [Serializzazione e approvazioni fuori ordine](design.md#serializzazione-e-approvazioni-fuori-ordine).
   Verificare con test isolati champion invariato, cambiato, assente, errori
   Registry e bootstrap con champion comparso.
-- [ ] Renderizzare la versione esatta, caricare runtime in KinD e applicare
+- [x] Renderizzare la versione esatta, caricare runtime in KinD e applicare
   risorse/InferenceService.
 - [ ] Attendere readiness, provare inferenza e aggiornare champion solo al successo.
 - [ ] Conservare report, manifest, lock, riferimenti modello e immagini come

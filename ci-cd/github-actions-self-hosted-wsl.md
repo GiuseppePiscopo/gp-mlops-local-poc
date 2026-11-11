@@ -2,7 +2,8 @@
 
 Questa procedura configura un runner GitHub Actions nel laboratorio WSL con
 Docker e KinD, verifica checkout e build delle immagini ed esegue training
-ed evaluation del modello `gp-mof-capstone-model` con MLflow.
+ed evaluation del modello `gp-mof-capstone-model` con MLflow, quindi applica
+la versione approvata al cluster KinD.
 
 ## Prerequisiti
 
@@ -281,19 +282,43 @@ Nella sezione **Artifacts** del riepilogo dell'esecuzione GitHub, scaricare
 
 Atteso: l'archivio contiene soltanto i quattro JSON, senza `test-data.json`.
 
-## Approvare l'esecuzione production
+## Approvare e applicare il deployment
 
 Nel dettaglio dell'esecuzione GitHub, verificare che **Train and evaluate**
-sia completato con successo e **Deploy (checks only)** sia in attesa di
+sia completato con successo e **Deploy** sia in attesa di
 review per l'environment `production`.
 
 Aprire **Review deployments**, selezionare `production` e premere
 **Approve and deploy**.
 
-Verificare il successo del job **Deploy (checks only)** e, nel Summary,
+Verificare il successo del job **Deploy** e, nel Summary,
 la sezione **Production approval**:
 
 - modello e versione uguali alla sezione **Model registration**;
 - run sorgente, URI del modello e commit uguali alla sezione **Training result**;
-- indicazione del completamento dei controlli pre-deploy;
-- indicazione che il job non ha modificato risorse del cluster o alias.
+- indicazione del completamento dei controlli pre-deploy.
+
+Nella sezione **Deployment apply**, verificare:
+
+- modello e versione uguali alla sezione **Model registration**;
+- contesto `kind-mlops-test`;
+- immagine runtime `gp-mof-capstone-mlserver:git-<commit>` con il commit della
+  sezione **Training result**, e relativo image ID;
+- indicazione dei manifest applicati, readiness e inferenza non ancora
+  verificate, champion invariato.
+
+In un secondo terminale WSL, controllare la risorsa applicata:
+
+```bash
+kubectl --context kind-mlops-test -n gp-mof-capstone-serving \
+  get inferenceservice gp-mof-capstone-model \
+  -o jsonpath='{.metadata.annotations.mlops\.gp-mof\.dev/resolved-version}{"\n"}{.metadata.annotations.mlops\.gp-mof\.dev/source-run-id}{"\n"}{.spec.predictor.model.storageUri}{"\n"}{.spec.predictor.model.env}{"\n"}'
+
+kubectl --context kind-mlops-test -n gp-mof-capstone-serving \
+  get servingruntime gp-mof-capstone-mlserver \
+  -o jsonpath='{.spec.containers[0].image}{"\n"}'
+```
+
+Verificare versione e run uguali al Summary, `storageUri` uguale allo
+**Storage URI** di **Deployment apply**, `MODEL_VERSION` uguale alla versione
+applicata e immagine del runtime uguale a **Runtime image**.

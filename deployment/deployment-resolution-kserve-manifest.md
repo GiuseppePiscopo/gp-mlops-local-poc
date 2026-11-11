@@ -217,6 +217,11 @@ spec:
         name: "mlflow"
       protocolVersion: "v2"
       storageUri: "s3://mlflow-artifacts/2/models/<model-id>/artifacts"
+      env:
+        - name: MODEL_NAME
+          value: "gp-mof-capstone-model"
+        - name: MODEL_VERSION
+          value: "1"
 ```
 
 Il nome del Secret usato dallo storage initializer è configurato in
@@ -349,7 +354,9 @@ Verificare:
   selezionata in MLflow;
 - nel manifest, annotation `mlops.gp-mof.dev/requested-version` uguale a
   `MODEL_VERSION` e assenza di `mlops.gp-mof.dev/requested-alias`;
-- `storageUri` del manifest uguale a `resolved_storage_uri` nel lock.
+- `storageUri` del manifest uguale a `resolved_storage_uri` nel lock;
+- `MODEL_NAME` e `MODEL_VERSION` in `spec.predictor.model.env` uguali al modello
+  e alla versione selezionati.
 
 Una versione inesistente, non pronta o non recuperabile interrompe il render,
 senza ripiegare su un alias e senza scrivere nuovi manifest o lock.

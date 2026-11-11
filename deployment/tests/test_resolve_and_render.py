@@ -78,6 +78,10 @@ class ModelSelectionTests(unittest.TestCase):
         self.assertEqual(annotations["mlops.gp-mof.dev/requested-version"], "2")
         self.assertNotIn("mlops.gp-mof.dev/requested-alias", annotations)
         self.assertEqual(manifest["spec"]["predictor"]["model"]["storageUri"], resolution["resolved_storage_uri"])
+        self.assertEqual(
+            manifest["spec"]["predictor"]["model"]["env"],
+            [{"name": "MODEL_NAME", "value": "gp-mof-capstone-model"}, {"name": "MODEL_VERSION", "value": "2"}],
+        )
 
     def test_configured_and_overridden_alias_rendering_is_preserved(self):
         for selection, expected_alias in [((), "champion"), (("--alias", "candidate"), "candidate")]:
@@ -95,6 +99,10 @@ class ModelSelectionTests(unittest.TestCase):
                 annotations = manifest["metadata"]["annotations"]
                 self.assertEqual(annotations["mlops.gp-mof.dev/requested-alias"], expected_alias)
                 self.assertNotIn("mlops.gp-mof.dev/requested-version", annotations)
+                self.assertEqual(
+                    manifest["spec"]["predictor"]["model"]["env"],
+                    [{"name": "MODEL_NAME", "value": "gp-mof-capstone-model"}, {"name": "MODEL_VERSION", "value": "1"}],
+                )
 
     def test_explicit_version_does_not_require_configured_alias(self):
         configuration = yaml.safe_load(self.config.read_text(encoding="utf-8"))

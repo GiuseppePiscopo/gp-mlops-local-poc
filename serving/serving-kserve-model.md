@@ -151,7 +151,8 @@ collegamento va ripetuto dopo aver ricreato il cluster.
 ## Applicare il Secret S3
 
 ```bash
-/opt/mlops-local-poc/serving/scripts/apply-storage-secret.sh
+KUBERNETES_CONTEXT=kind-mlops-test \
+  /opt/mlops-local-poc/serving/scripts/apply-storage-secret.sh
 ```
 
 Lo script legge le credenziali da `/opt/mlops-local-poc/mlflow/.env` e risolve

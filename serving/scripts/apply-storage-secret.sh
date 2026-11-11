@@ -5,6 +5,10 @@ set -euo pipefail
 # Resolve the static serving configuration relative to this script.
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE="${SCRIPT_DIR}/../config/storage-secret.env"
+KUBECTL=(kubectl)
+if [[ -n "${KUBERNETES_CONTEXT:-}" ]]; then
+  KUBECTL+=(--context "$KUBERNETES_CONTEXT")
+fi
 
 if [[ ! -f "${CONFIG_FILE}" ]]; then
   echo "Configuration file not found: ${CONFIG_FILE}" >&2
@@ -66,19 +70,19 @@ fi
 s3_endpoint="${seaweedfs_ip}:${SEAWEEDFS_S3_PORT}"
 
 # Create or update the Kubernetes Secret without a client-side apply annotation.
-kubectl -n "${KUBERNETES_NAMESPACE}" create secret generic "${S3_SECRET_NAME}" \
+"${KUBECTL[@]}" -n "${KUBERNETES_NAMESPACE}" create secret generic "${S3_SECRET_NAME}" \
   --from-literal="AWS_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID}" \
   --from-literal="AWS_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY}" \
   --dry-run=client \
   -o yaml \
-  | kubectl -n "${KUBERNETES_NAMESPACE}" apply \
+  | "${KUBECTL[@]}" -n "${KUBERNETES_NAMESPACE}" apply \
     --server-side \
     --force-conflicts \
     --field-manager=gp-mof-capstone-serving \
     -f -
 
 # Configure KServe storage initializer for SeaweedFS S3 over HTTP and path style.
-kubectl -n "${KUBERNETES_NAMESPACE}" annotate secret "${S3_SECRET_NAME}" \
+"${KUBECTL[@]}" -n "${KUBERNETES_NAMESPACE}" annotate secret "${S3_SECRET_NAME}" \
   --overwrite \
   "serving.kserve.io/s3-endpoint=${s3_endpoint}" \
   "serving.kserve.io/s3-usehttps=0" \
@@ -86,7 +90,7 @@ kubectl -n "${KUBERNETES_NAMESPACE}" annotate secret "${S3_SECRET_NAME}" \
   "serving.kserve.io/s3-usevirtualbucket=0"
 
 # Remove any legacy client-side apply annotation that could contain Secret data.
-kubectl -n "${KUBERNETES_NAMESPACE}" annotate secret "${S3_SECRET_NAME}" \
+"${KUBECTL[@]}" -n "${KUBERNETES_NAMESPACE}" annotate secret "${S3_SECRET_NAME}" \
   kubectl.kubernetes.io/last-applied-configuration- \
   2>/dev/null || true
 

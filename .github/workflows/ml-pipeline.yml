@@ -165,7 +165,7 @@ jobs:
           printf '%s\n' \
             '## Pipeline scope' \
             '' \
-            'Training and evaluation completed. Registration runs only after a successful gate on main/manual runs. Production approval is handled by the dependent job; deployment is not implemented yet.' \
+            'Training and evaluation completed. Registration runs only after a successful gate on main/manual runs. Production approval and deployment application are handled by the dependent job.' \
             >> "$GITHUB_STEP_SUMMARY"
 
       - name: Clean ephemeral test set
@@ -176,7 +176,7 @@ jobs:
             --workspace "$TEST_SET_WORKSPACE"
 
   deploy:
-    name: Deploy (checks only)
+    name: Deploy
     needs: train-and-evaluate
     if: >-
       success() &&
@@ -189,7 +189,7 @@ jobs:
       cancel-in-progress: false
       queue: max
     runs-on: [self-hosted, Linux, X64, mlops-local]
-    timeout-minutes: 5
+    timeout-minutes: 30
     defaults:
       run:
         shell: bash
@@ -197,6 +197,9 @@ jobs:
       GIT_REPOSITORY: ${{ github.workspace }}
       DOCKER_NETWORK: mlops-local-network
       MLFLOW_TRACKING_URI: http://mlflow:5000
+      KIND_CLUSTER: mlops-test
+      KUBERNETES_CONTEXT: kind-mlops-test
+      DEPLOYMENT_DIRECTORY: deployment-${{ github.run_id }}-${{ github.run_attempt }}
       MODEL_RUN_ID: ${{ needs.train-and-evaluate.outputs.run_id }}
       MODEL_URI: ${{ needs.train-and-evaluate.outputs.model_uri }}
       MODEL_COMMIT: ${{ needs.train-and-evaluate.outputs.git_commit }}
@@ -231,5 +234,20 @@ jobs:
             "- Model URI: \`$MODEL_URI\`" \
             "- Commit: \`$MODEL_COMMIT\`" \
             '' \
-            'Approval and pre-deployment checks completed. Deployment is not implemented yet; no cluster resources or model aliases were changed by this job.' \
+            'Approval and pre-deployment checks completed.' \
             >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Apply approved model to KinD
+        run: |
+          python3 "$GIT_REPOSITORY/ci-cd/scripts/apply-deployment.py" \
+            --repository "$GIT_REPOSITORY" \
+            --output-directory "$RUNNER_TEMP/$DEPLOYMENT_DIRECTORY" \
+            --registered-model "$REGISTERED_MODEL" \
+            --model-version "$MODEL_VERSION" \
+            --model-uri "$MODEL_URI" \
+            --run-id "$MODEL_RUN_ID" \
+            --expected-commit "$MODEL_COMMIT" \
+            --cluster "$KIND_CLUSTER" \
+            --context "$KUBERNETES_CONTEXT" \
+            --network "$DOCKER_NETWORK" \
+            --summary "$GITHUB_STEP_SUMMARY"
