@@ -19,6 +19,7 @@ from pathlib import Path
 import mlflow.sklearn
 import pandas as pd
 from common.evaluation import evaluate_candidate, snapshot_champion, test_set_identity
+from common.test_set_persistence import save_test_set
 from common.training_snapshot import load_snapshot
 from common.training_utils import RANDOM_SEED, TEST_SIZE, eval_model, get_data, prepare_data
 from mlflow.models import infer_signature
@@ -65,6 +66,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--evaluate_champion", action="store_true", help="Compare against a fixed champion snapshot.")
     parser.add_argument("--input_snapshot", type=Path, help="Use a previously acquired dataset and champion snapshot.")
+    parser.add_argument("--test_set_directory", type=Path, help="Write the test set to this ephemeral directory.")
     parser.add_argument(
         "--fail_for_alert_test",
         type=lambda value: value.lower() == "true",
@@ -151,6 +153,8 @@ def train_model(
 
 
 def main(args: argparse.Namespace) -> None:
+    if args.input_snapshot is not None and args.test_set_directory is None:
+        raise ValueError("--input_snapshot requires --test_set_directory.")
     if args.input_snapshot is not None and not args.evaluate_champion:
         raise ValueError("--input_snapshot requires --evaluate_champion.")
     if args.evaluate_champion and (not args.skip_registration or args.result_json is None):
@@ -264,8 +268,13 @@ def main(args: argparse.Namespace) -> None:
             "model_uri": model_info.model_uri,
             "git_commit": os.getenv("GIT_COMMIT", "unknown"),
         }
+        if input_snapshot is not None:
+            manifest = save_test_set(args.test_set_directory, X_test, y_test, result.copy(), input_snapshot)
+            mlflow.log_dict(manifest, "evaluation/test-set-manifest.json")
+            result["test_set_manifest"] = manifest
         if champion is not None:
-            report = evaluate_candidate(result.copy(), champion, test_set, X_test, y_test)
+            candidate = {key: result[key] for key in ("run_id", "model_uri", "git_commit")}
+            report = evaluate_candidate(candidate, champion, test_set, X_test, y_test)
             mlflow.log_dict(report, "evaluation/report.json")
             mlflow.set_tag("evaluation.passed", str(report["passed"]).lower())
             result["evaluation"] = report

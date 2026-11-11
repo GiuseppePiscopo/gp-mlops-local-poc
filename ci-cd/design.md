@@ -193,6 +193,12 @@ il percorso non orchestrato deve restare utilizzabile.
 - Il training salva il test set effettivo: feature, target, indici delle
   righe, ordine e tipi. Il manifest prodotto associa checksum dei file,
   identità del test set, run e hash del CSV allo snapshot iniziale verificato.
+- Il contenuto del test set resta in una directory per esecuzione sotto
+  `RUNNER_TEMP`, condivisa tra training ed evaluation e montata in sola lettura
+  nell'evaluation. Pulire quella directory a fine job anche in caso di errore.
+  In MLflow conservare soltanto manifest, identità, snapshot e report, non i
+  dati del test set. Dopo la pulizia la ripetizione richiede i dati sorgente;
+  il checksum non ne garantisce la recuperabilità.
 - L'evaluation riceve JSON del candidato, snapshot champion e test set;
   verifica coerenza e checksum prima di misurare entrambi i modelli.
   Non ripete split o preprocessing e non accetta nuovi hash come sostituti

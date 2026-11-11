@@ -27,6 +27,7 @@ DEFAULT_REGISTERED_MODEL_NAME = "gp-mof-capstone-model"
 CONTAINER_DATASET_PATH = "/data/input/SeoulBikeData.csv"
 CONTAINER_RESULT_PATH = "/app/training-result.json"
 CONTAINER_SNAPSHOT_PATH = "/data/input/snapshot.json"
+CONTAINER_TEST_SET_PATH = "/app/test-set"
 
 
 class PreRunValidationError(Exception):
@@ -118,6 +119,7 @@ def parse_args() -> argparse.Namespace:
         "--evaluate-champion", action="store_true", help="Apply the relative RMSE gate against champion."
     )
     parser.add_argument("--input-snapshot", type=Path, help="Use the prepared dataset and champion snapshot.")
+    parser.add_argument("--test-set-directory", type=Path, help="Export the test set to an ephemeral directory.")
     parser.add_argument(
         "--n-estimators",
         type=int,
@@ -317,7 +319,9 @@ def resolve_run_context(args: argparse.Namespace) -> RunContext:
     )
 
 
-def build_docker_command(run_context: RunContext, result_file: Path | None = None) -> list[str]:
+def build_docker_command(
+    run_context: RunContext, result_file: Path | None = None, test_set_directory: Path | None = None
+) -> list[str]:
     environment_variables = {
         "MLFLOW_TRACKING_URI": run_context.mlflow_tracking_uri,
         "MLFLOW_EXPERIMENT_NAME": run_context.experiment_name,
@@ -341,6 +345,8 @@ def build_docker_command(run_context: RunContext, result_file: Path | None = Non
     ]
     if result_file is not None:
         command.extend(["--mount", f"type=bind,src={result_file},dst={CONTAINER_RESULT_PATH}"])
+    if test_set_directory is not None:
+        command.extend(["--mount", f"type=bind,src={test_set_directory},dst={CONTAINER_TEST_SET_PATH}"])
     if run_context.input_snapshot is not None:
         command.extend(
             ["--mount", f"type=bind,src={run_context.input_snapshot},dst={CONTAINER_SNAPSHOT_PATH},readonly"]
@@ -371,6 +377,8 @@ def build_docker_command(run_context: RunContext, result_file: Path | None = Non
         command.extend(["--input_snapshot", CONTAINER_SNAPSHOT_PATH])
     if result_file is not None:
         command.extend(["--result_json", CONTAINER_RESULT_PATH])
+    if test_set_directory is not None:
+        command.extend(["--test_set_directory", CONTAINER_TEST_SET_PATH])
 
     return command
 
@@ -409,7 +417,19 @@ def execute_docker_command(docker_command: list[str]) -> None:
         raise SystemExit(error.returncode) from error
 
 
-def execute_training(run_context: RunContext, result_json: Path | None) -> None:
+def execute_training(run_context: RunContext, result_json: Path | None, test_set_directory: Path | None = None) -> None:
+    if run_context.input_snapshot is not None and test_set_directory is None:
+        raise PreRunValidationError("--input-snapshot requires --test-set-directory.")
+    if test_set_directory is not None:
+        test_set_directory = test_set_directory.expanduser().resolve()
+        if test_set_directory.is_relative_to(run_context.git_repository_path):
+            raise PreRunValidationError("--test-set-directory must be outside the Git checkout.")
+        if run_context.input_snapshot is None:
+            raise PreRunValidationError("--test-set-directory requires --input-snapshot.")
+        # The private parent belongs to the runner; only this mounted child is writable by the container.
+        test_set_directory.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        test_set_directory.mkdir(mode=0o777)
+        test_set_directory.chmod(0o777)
     if result_json is None:
         docker_command = build_docker_command(run_context)
         print_run_summary(run_context, docker_command)
@@ -430,7 +450,7 @@ def execute_training(run_context: RunContext, result_json: Path | None) -> None:
         # the temporary parent directory remains private to the launcher.
         result_file.chmod(0o666)
 
-        docker_command = build_docker_command(run_context, result_file)
+        docker_command = build_docker_command(run_context, result_file, test_set_directory)
         print_run_summary(run_context, docker_command)
         exit_code = 0
         try:
@@ -459,7 +479,7 @@ def main() -> None:
     try:
         args = parse_args()
         run_context = resolve_run_context(args)
-        execute_training(run_context, args.result_json)
+        execute_training(run_context, args.result_json, args.test_set_directory)
     except PreRunValidationError as error:
         print(f"Pre-run validation error: {error}", file=sys.stderr)
         raise SystemExit(2) from error

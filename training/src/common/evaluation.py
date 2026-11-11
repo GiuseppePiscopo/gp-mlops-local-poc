@@ -35,6 +35,11 @@ def test_set_identity(dataset_sha256: str, features: pd.DataFrame, target: pd.Se
         "preprocessing_sha256": hashlib.sha256(Path(training_utils.__file__).read_bytes()).hexdigest(),
         "feature_names": features.columns.tolist(),
         "feature_dtypes": [str(dtype) for dtype in features.dtypes],
+        "feature_columns_name": features.columns.name,
+        "target_name": target.name,
+        "target_dtype": str(target.dtype),
+        "index_name": features.index.name,
+        "index_dtype": str(features.index.dtype),
         "test_row_indices": features.index.tolist(),
         "test_values_sha256": hashlib.sha256(
             pd.util.hash_pandas_object(values, index=True).values.tobytes()

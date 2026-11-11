@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
+from common.test_set_persistence import load_test_set
 from common.training_snapshot import DATASET_FILENAME, SNAPSHOT_FILENAME, prepare_snapshot
 from random_forest import train
 
@@ -52,6 +53,7 @@ class EvaluationIntegrationTests(unittest.TestCase):
                     result_json=root / "baseline.json",
                     evaluate_champion=False,
                     input_snapshot=None,
+                    test_set_directory=None,
                     fail_for_alert_test=False,
                 )
 
@@ -65,6 +67,8 @@ class EvaluationIntegrationTests(unittest.TestCase):
                     prepare_snapshot(client, "isolated-model", path, snapshot_directory, "a" * 40)
                     args.training_data = str(snapshot_directory / DATASET_FILENAME)
                     args.input_snapshot = snapshot_directory / SNAPSHOT_FILENAME
+                    args.test_set_directory = root / "test-set"
+                    args.test_set_directory.mkdir()
                     args.skip_registration = True
                     args.evaluate_champion = True
                     args.result_json = root / "candidate.json"
@@ -94,13 +98,25 @@ class EvaluationIntegrationTests(unittest.TestCase):
                             "evaluation/test-set.json",
                             "evaluation/report.json",
                             "evaluation/input-snapshot.json",
+                            "evaluation/test-set-manifest.json",
                         },
                     )
+                    candidate = {key: result[key] for key in ("run_id", "model_uri", "git_commit")}
+                    snapshot = json.loads(args.input_snapshot.read_text())
+                    with patch.object(train, "prepare_data", side_effect=AssertionError("Preprocessing repeated")):
+                        features, target = load_test_set(
+                            args.test_set_directory, result["test_set_manifest"], candidate, snapshot
+                        )
+                    self.assertEqual(len(features), 20)
+                    self.assertEqual(features.index.tolist(), report["test_set"]["test_row_indices"])
+                    self.assertEqual(len(target), 20)
 
                     path.write_bytes(original_bytes)
                     args.n_estimators = 1
                     args.max_depth = 1
                     args.result_json = root / "rejected.json"
+                    args.test_set_directory = root / "rejected-test-set"
+                    args.test_set_directory.mkdir()
                     with self.assertRaises(SystemExit) as failure:
                         train.main(args)
                     self.assertEqual(failure.exception.code, 1)

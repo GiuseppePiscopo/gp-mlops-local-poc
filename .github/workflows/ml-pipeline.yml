@@ -30,6 +30,7 @@ jobs:
       BUILD_RESULT: pipeline-build-${{ github.run_id }}-${{ github.run_attempt }}.json
       TRAINING_RESULT: training-${{ github.run_id }}-${{ github.run_attempt }}.json
       TRAINING_SNAPSHOT: snapshot-${{ github.run_id }}-${{ github.run_attempt }}
+      TEST_SET_WORKSPACE: test-set-${{ github.run_id }}-${{ github.run_attempt }}
       TRAINING_DATA_HOST_PATH: /opt/mlops-local-poc/training/data/input/SeoulBikeData.csv
       DOCKER_NETWORK: mlops-local-network
       MLFLOW_TRACKING_URI: http://mlflow:5000
@@ -75,6 +76,7 @@ jobs:
             --evaluate-champion \
             --training-data "$RUNNER_TEMP/$TRAINING_SNAPSHOT/SeoulBikeData.csv" \
             --input-snapshot "$RUNNER_TEMP/$TRAINING_SNAPSHOT/snapshot.json" \
+            --test-set-directory "$RUNNER_TEMP/$TEST_SET_WORKSPACE/data" \
             --result-json "$RUNNER_TEMP/$TRAINING_RESULT" \
             --n-estimators 100 \
             --max-depth 10
@@ -94,3 +96,10 @@ jobs:
             '' \
             'Training and relative evaluation completed. Model Registry registration and deployment are not implemented yet.' \
             >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Clean ephemeral test set
+        if: ${{ always() }}
+        run: |
+          python3 "$GIT_REPOSITORY/ci-cd/scripts/clean-test-set.py" \
+            --runner-temp "$RUNNER_TEMP" \
+            --workspace "$TEST_SET_WORKSPACE"

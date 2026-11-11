@@ -80,8 +80,10 @@ le evidenze sono in [design.md](design.md); la procedura operativa in costruzion
   secondo [Confronto e prove PR](design.md#confronto-e-prove-pr):
   - [x] Acquisire prima del training snapshot champion e copia CSV per esecuzione,
     fuori dal checkout, con SHA-256 fissato e mount in sola lettura.
-  - [ ] Salvare dal training il test set effettivo con feature, target, indici,
-    ordine e tipi; associare identità e checksum al run e al dataset iniziale.
+  - [x] Salvare dal training il test set effettivo con feature, target, indici,
+    ordine e tipi in storage effimero del runner, con pulizia a fine job;
+    conservare in MLflow solo manifest, identità e checksum associati al run
+    e al dataset iniziale.
   - [ ] Eseguire il gate in uno script dedicato nella stessa immagine training,
     usando risultati espliciti del training, snapshot champion e test set verificato;
     non rileggere alias o CSV runtime e non ripetere split/preprocessing.

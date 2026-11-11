@@ -34,6 +34,7 @@ class TrainingRegistrationTests(unittest.TestCase):
                     result_json=output,
                     evaluate_champion=False,
                     input_snapshot=None,
+                    test_set_directory=None,
                 )
                 features = MagicMock()
                 with (
@@ -95,6 +96,7 @@ class TrainingRegistrationTests(unittest.TestCase):
             result_json=None,
             evaluate_champion=False,
             input_snapshot=None,
+            test_set_directory=None,
         )
         with (
             patch.dict("os.environ", {"MLFLOW_TRACKING_URI": "http://unused"}),
@@ -114,6 +116,7 @@ class TrainingRegistrationTests(unittest.TestCase):
                 git_repository_path=root / "checkout",
                 skip_registration=True,
                 image_digest="",
+                input_snapshot=None,
             )
             result = {"run_id": "run-123", "model_uri": "models:/m-123", "git_commit": context.git_commit}
             mount_files = []
@@ -144,6 +147,7 @@ class TrainingRegistrationTests(unittest.TestCase):
                     git_repository_path=root / "checkout",
                     skip_registration=True,
                     image_digest="",
+                    input_snapshot=None,
                 )
                 output = root / "result.json"
 
@@ -169,7 +173,7 @@ class TrainingRegistrationTests(unittest.TestCase):
     def test_launcher_rejects_checkout_output_and_existing_result_before_running(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            context = MagicMock(git_repository_path=root / "checkout")
+            context = MagicMock(git_repository_path=root / "checkout", input_snapshot=None)
             existing = root / "result.json"
             existing.write_text("previous")
             with patch.object(launcher, "execute_docker_command") as execute:
@@ -188,6 +192,7 @@ class TrainingRegistrationTests(unittest.TestCase):
                 skip_registration=True,
                 evaluate_champion=True,
                 image_digest="",
+                input_snapshot=None,
             )
             result = {
                 "run_id": "run",
