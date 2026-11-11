@@ -46,7 +46,7 @@ All'interno di questa fase, gli 8 passaggi concettuali della "vertical slice" er
 
 ## Prossimi sviluppi
 
-Nessuno al momento.
+- **Grafana** — persistenza su PVC: dimensionamento minimo e migrazione della configurazione attuale.
 
 ## Estensioni successive
 

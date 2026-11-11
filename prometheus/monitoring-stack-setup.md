@@ -132,8 +132,11 @@ kubectl --context kind-mlops-test -n monitoring \
   port-forward service/mlops-monitoring-grafana 3000:80
 ```
 
-Aprire `http://localhost:3000` e accedere con utente `admin` e password
-`admin`. Il datasource Prometheus è già provisionato: verificarlo in
+Aprire `http://localhost:3000`. Al primo accesso usare utente `admin` e password
+`admin`, quindi impostare una nuova password. Agli accessi successivi usare
+la password impostata.
+
+Il datasource Prometheus è già provisionato: verificarlo in
 `Connections > Data sources > Prometheus` con `Save & test`.
 
 Atteso: esito positivo del test del datasource.
@@ -220,10 +223,11 @@ kubectl --context kind-mlops-test -n monitoring \
 
 Atteso: una riga con `DATA` uguale a `1` e label `grafana_dashboard=1`.
 
-Verificare che Grafana l'abbia caricata:
+Verificare che Grafana l'abbia caricata, inserendo la password impostata quando
+richiesta:
 
 ```bash
-curl -s -u admin:admin 'http://127.0.0.1:3000/api/search?query=predictor' \
+curl -s -u admin 'http://127.0.0.1:3000/api/search?query=predictor' \
   | python3 -m json.tool
 ```
 
