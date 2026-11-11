@@ -76,7 +76,7 @@ le evidenze sono in [design.md](design.md); la procedura operativa in costruzion
 - [x] Separare logging da registrazione nel codice/launcher; aggiornare CLI
   e procedura manuale, mantenendo utilizzabile il percorso non orchestrato.
 - [x] Implementare snapshot champion, identità del test set e gate relativo.
-- [ ] Separare preparazione, training ed evaluation in step dello stesso job,
+- [x] Separare preparazione, training ed evaluation in step dello stesso job,
   secondo [Confronto e prove PR](design.md#confronto-e-prove-pr):
   - [x] Acquisire prima del training snapshot champion e copia CSV per esecuzione,
     fuori dal checkout, con SHA-256 fissato e mount in sola lettura.
@@ -87,7 +87,7 @@ le evidenze sono in [design.md](design.md); la procedura operativa in costruzion
   - [x] Eseguire il gate in uno script dedicato nella stessa immagine training,
     usando risultati espliciti del training, snapshot champion e test set verificato;
     non rileggere alias o CSV runtime e non ripetere split/preprocessing.
-  - [ ] Aggiornare launcher, workflow e test; verificare alterazioni di CSV/test set,
+  - [x] Aggiornare launcher, workflow e test; verificare alterazioni di CSV/test set,
     parità, regressione ed esportazione del report anche a gate fallito.
 - [ ] Implementare bootstrap esplicito con soglie assolute e controlli dedicati.
 - [ ] Produrre risultati JSON, report e output tra job secondo il design;

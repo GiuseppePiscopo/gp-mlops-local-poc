@@ -166,22 +166,57 @@ class EvaluationIntegrationTests(unittest.TestCase):
                         "a" * 40,
                     )
                     self.assertFalse(rejected_report["passed"])
-                    with (
-                        patch.object(
-                            evaluate,
-                            "parse_arguments",
-                            return_value=argparse.Namespace(
-                                training_result=args.result_json,
-                                input_snapshot=args.input_snapshot,
-                                test_set_directory=args.test_set_directory,
-                                report=root / "rejected-cli-report.json",
-                                expected_commit="a" * 40,
-                            ),
-                        ),
-                        self.assertRaises(SystemExit) as failure,
-                    ):
-                        evaluate.main()
-                    self.assertIn("Evaluation rejected", str(failure.exception))
+                    rejected_cli_report = root / "rejected-cli-report.json"
+                    process = subprocess.run(
+                        [
+                            sys.executable,
+                            "-m",
+                            "evaluation.evaluate",
+                            "--training-result",
+                            str(args.result_json),
+                            "--input-snapshot",
+                            str(args.input_snapshot),
+                            "--test-set-directory",
+                            str(args.test_set_directory),
+                            "--report",
+                            str(rejected_cli_report),
+                            "--expected-commit",
+                            "a" * 40,
+                        ],
+                        capture_output=True,
+                        text=True,
+                    )
+                    self.assertEqual(process.returncode, 1, process.stdout + process.stderr)
+                    self.assertIn("Evaluation rejected", process.stderr)
+                    self.assertEqual(json.loads(rejected_cli_report.read_text()), rejected_report)
+                    saved_report = Path(client.download_artifacts(rejected["run_id"], "evaluation/report.json"))
+                    self.assertEqual(json.loads(saved_report.read_text()), rejected_report)
+                    self.assertEqual(client.get_run(rejected["run_id"]).data.tags["evaluation.passed"], "false")
+                    summary = root / "rejected-summary.md"
+                    reporter = (
+                        Path(__file__).resolve().parents[2] / "ci-cd" / "scripts" / "report-training-evaluation.py"
+                    )
+                    subprocess.run(
+                        [
+                            sys.executable,
+                            str(reporter),
+                            "--result",
+                            str(args.result_json),
+                            "--evaluation",
+                            str(rejected_cli_report),
+                            "--summary",
+                            str(summary),
+                        ],
+                        check=True,
+                        capture_output=True,
+                        text=True,
+                    )
+                    self.assertIn("Passed: `False`", summary.read_text())
+                    self.assertIn(
+                        f"| rmse | {rejected_report['candidate_metrics']['rmse']} | "
+                        f"{rejected_report['champion_metrics']['rmse']} |",
+                        summary.read_text(),
+                    )
                     self.assertEqual(client.get_run(rejected["run_id"]).info.status, "FINISHED")
                     self.assertEqual(len(client.search_model_versions("name='isolated-model'")), 1)
                     self.assertEqual(str(client.get_model_version_by_alias("isolated-model", "champion").version), "1")
