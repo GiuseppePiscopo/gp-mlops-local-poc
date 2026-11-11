@@ -1,6 +1,6 @@
 # Deployment gp-mof-capstone: risoluzione MLflow e rendering manifest KServe
 
-Questa procedura risolve un alias MLflow del modello registrato `gp-mof-capstone-model`, verifica che la versione sia pronta, traduce l’URI logico degli artefatti nel corrispondente URI S3 SeaweedFS e genera un manifest KServe `InferenceService` con il relativo lock JSON di provenance.
+Questa procedura seleziona il modello registrato `gp-mof-capstone-model` tramite alias MLflow o versione esplicita, verifica che la versione sia pronta, traduce l’URI logico degli artefatti nel corrispondente URI S3 SeaweedFS e genera un manifest KServe `InferenceService` con il relativo lock JSON di provenance.
 
 La procedura **non applica** il manifest al cluster Kubernetes e non avvia il serving del modello. Per collegare KinD alla rete SeaweedFS, applicare il Secret S3 e avviare l'`InferenceService`, seguire la [procedura di serving](../serving/serving-kserve-model.md).
 
@@ -165,6 +165,7 @@ L’output JSON deve contenere valori simili ai seguenti:
   "resolution": {
     "registered_model": "gp-mof-capstone-model",
     "requested_alias": "champion",
+    "requested_version": null,
     "resolved_version": "1",
     "resolved_storage_uri": "s3://mlflow-artifacts/2/models/<model-id>/artifacts",
     "status": "READY"
@@ -232,7 +233,8 @@ cat /opt/mlops-local-poc/deployment/rendered/gp-mof-capstone-model-v1.resolution
 Il lock deve contenere:
 
 - modello registrato;
-- alias richiesto;
+- alias richiesto (`requested_alias`) e versione richiesta (`requested_version`),
+  con il selettore non usato uguale a `null`;
 - versione concreta risolta;
 - run ID MLflow;
 - URI sorgente della Model Version;
@@ -309,6 +311,48 @@ cat /opt/mlops-local-poc/deployment/rendered/gp-mof-capstone-model-v2.resolution
 ```
 
 L’alias `candidate` deve risultare nel manifest e nel lock, insieme alla versione concreta e allo `storageUri` della V2.
+
+## Renderizzare una versione esatta
+
+Aprire **Models > gp-mof-capstone-model** in MLflow e annotare il numero della
+versione appena registrata. Impostarlo in WSL:
+
+```bash
+export MODEL_VERSION="<numero-versione>"
+```
+
+Renderizzare quella versione senza risolvere un alias:
+
+```bash
+/opt/mlops-local-poc/deployment/scripts/render.sh \
+  --registered-model gp-mof-capstone-model \
+  --version "${MODEL_VERSION}"
+```
+
+Non aggiungere `--alias` al comando.
+
+Ispezionare manifest e lock:
+
+```bash
+grep -E \
+  'requested-version|resolved-version|source-run-id|resolved-storage-uri|storageUri' \
+  "/opt/mlops-local-poc/deployment/rendered/gp-mof-capstone-model-v${MODEL_VERSION}.yaml"
+
+cat "/opt/mlops-local-poc/deployment/rendered/gp-mof-capstone-model-v${MODEL_VERSION}.resolution.json"
+```
+
+Verificare:
+
+- nel lock, `requested_alias` uguale a `null`, `requested_version` e
+  `resolved_version` uguali a `MODEL_VERSION`, stato `READY`;
+- run sorgente e URI della Model Version uguali a quelli della versione
+  selezionata in MLflow;
+- nel manifest, annotation `mlops.gp-mof.dev/requested-version` uguale a
+  `MODEL_VERSION` e assenza di `mlops.gp-mof.dev/requested-alias`;
+- `storageUri` del manifest uguale a `resolved_storage_uri` nel lock.
+
+Una versione inesistente, non pronta o non recuperabile interrompe il render,
+senza ripiegare su un alias e senza scrivere nuovi manifest o lock.
 
 ## Verificare il fail-fast
 

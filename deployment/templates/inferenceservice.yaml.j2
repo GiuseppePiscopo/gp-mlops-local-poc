@@ -9,7 +9,11 @@ metadata:
     app.kubernetes.io/managed-by: gp-mof-capstone-deployment-resolver
   annotations:
     mlops.gp-mof.dev/registered-model: {{ resolution.registered_model | tojson }}
+{% if resolution.requested_alias is not none %}
     mlops.gp-mof.dev/requested-alias: {{ resolution.requested_alias | tojson }}
+{% else %}
+    mlops.gp-mof.dev/requested-version: {{ resolution.requested_version | tojson }}
+{% endif %}
     mlops.gp-mof.dev/resolved-version: {{ resolution.resolved_version | tojson }}
     mlops.gp-mof.dev/source-run-id: {{ resolution.source_run_id | tojson }}
     mlops.gp-mof.dev/model-version-source-uri: {{ resolution.model_version_source_uri | tojson }}

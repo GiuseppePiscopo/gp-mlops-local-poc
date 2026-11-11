@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
-"""Resolve an MLflow model alias and render a KServe InferenceService manifest.
+"""Resolve an MLflow model alias or version and render a KServe InferenceService manifest.
 
-The configured alias is resolved to a model version, which must be READY. The
+The selected alias or explicit version must identify a READY model version. The
 model's MLflow download URI is translated to the configured object-storage URI,
 then used to render and validate the manifest. The output directory receives
 the manifest and a JSON lock file recording the resolved model provenance.
@@ -10,6 +10,7 @@ the manifest and a JSON lock file recording the resolved model provenance.
 
 import argparse
 import json
+import re
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -42,7 +43,8 @@ class DeploymentSettings:
     artifact_proxy_uri_prefix: str
     artifact_storage_uri_prefix: str
     registered_model: str
-    alias: str
+    alias: str | None
+    version: str | None
     kserve: KServeSettings
     output_directory: Path
 
@@ -50,13 +52,14 @@ class DeploymentSettings:
 @dataclass(frozen=True)
 class ModelResolution:
     registered_model: str
-    requested_alias: str
+    requested_alias: str | None
     resolved_version: str
     source_run_id: str
     model_version_source_uri: str
     model_version_download_uri: str
     resolved_storage_uri: str
     status: str
+    requested_version: str | None
 
 
 @dataclass(frozen=True)
@@ -68,7 +71,7 @@ class DeploymentResult:
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Resolve an MLflow alias and render a KServe InferenceService manifest."
+        description="Resolve an MLflow alias or version and render a KServe InferenceService manifest."
     )
     parser.add_argument(
         "--config",
@@ -80,9 +83,14 @@ def parse_arguments() -> argparse.Namespace:
         "--registered-model",
         help="Override the registered model configured in the YAML file.",
     )
-    parser.add_argument(
+    selection = parser.add_mutually_exclusive_group()
+    selection.add_argument(
         "--alias",
         help="Override the model alias configured in the YAML file.",
+    )
+    selection.add_argument(
+        "--version",
+        help="Select an exact positive model version instead of the configured alias.",
     )
     return parser.parse_args()
 
@@ -151,7 +159,12 @@ def load_deployment_settings(arguments: argparse.Namespace) -> DeploymentSetting
             ("mlflow", "artifact_storage_uri_prefix"),
         ),
         registered_model=(arguments.registered_model or require_string(configuration, ("model", "registered_model"))),
-        alias=arguments.alias or require_string(configuration, ("model", "alias")),
+        alias=(
+            None
+            if arguments.version is not None
+            else arguments.alias or require_string(configuration, ("model", "alias"))
+        ),
+        version=arguments.version,
         kserve=kserve,
         output_directory=Path(require_string(configuration, ("output", "directory"))),
     )
@@ -160,8 +173,23 @@ def load_deployment_settings(arguments: argparse.Namespace) -> DeploymentSetting
 def resolve_model_version(
     client: MlflowClient,
     registered_model: str,
-    alias: str,
+    alias: str | None,
+    version: str | None = None,
 ) -> ModelVersion:
+    if version is not None:
+        if alias is not None:
+            raise ValueError("Select either a model alias or an explicit version, not both.")
+        if not re.fullmatch(r"[1-9][0-9]*", version):
+            raise ValueError("Explicit model version must be a positive integer without leading zeros.")
+
+        model_version = client.get_model_version(name=registered_model, version=version)
+        if model_version.name != registered_model or str(model_version.version) != version:
+            raise ValueError("Resolved model identity does not match the explicitly requested version.")
+        return model_version
+
+    if not alias:
+        raise ValueError("A model alias or an explicit version is required.")
+
     return client.get_model_version_by_alias(
         name=registered_model,
         alias=alias,
@@ -206,6 +234,7 @@ def resolve_deployment(settings: DeploymentSettings) -> ModelResolution:
         client=client,
         registered_model=settings.registered_model,
         alias=settings.alias,
+        version=settings.version,
     )
 
     ensure_model_version_ready(model_version)
@@ -224,12 +253,13 @@ def resolve_deployment(settings: DeploymentSettings) -> ModelResolution:
     return ModelResolution(
         registered_model=model_version.name,
         requested_alias=settings.alias,
-        resolved_version=model_version.version,
+        resolved_version=str(model_version.version),
         source_run_id=model_version.run_id,
         model_version_source_uri=model_version.source,
         model_version_download_uri=download_uri,
         resolved_storage_uri=storage_uri,
         status=str(model_version.status),
+        requested_version=settings.version,
     )
 
 

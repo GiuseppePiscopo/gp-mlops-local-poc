@@ -95,7 +95,7 @@ le evidenze sono in [design.md](design.md); la procedura operativa in costruzion
   pubblicare metriche ed esiti nel riepilogo del workflow.
 - [x] Registrare solo post-gate su main/manuale e assegnare candidate READY;
   aggiungere agli output la versione esatta per il job di deploy.
-- [ ] Estendere resolver, CLI, lock e documentazione per versione esplicita,
+- [x] Estendere resolver, CLI, lock e documentazione per versione esplicita,
   preservando il rendering manuale per alias.
 - [ ] Definire serializzazione dei deploy e rifiuto dei rilasci obsoleti
   approvati fuori ordine, includendo il caso bootstrap.
