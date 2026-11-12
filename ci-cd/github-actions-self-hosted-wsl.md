@@ -611,3 +611,29 @@ invariati rispetto all'inizio dello scenario.
 Ripetere i controlli dell'InferenceService e del ServingRuntime. Verificare
 che versione, run sorgente, URI S3 e immagine runtime coincidano con quelli
 annotati prima dell'esecuzione.
+
+## Verificare gli errori di deployment con test isolati
+
+Questa prova simula gli errori tramite test isolati, senza provocare guasti
+nel cluster reale.
+
+In PowerShell su Windows, dalla root del repository, eseguire:
+
+```powershell
+python -m unittest discover -s .\ci-cd\tests -p "test_*deployment.py" -k DeploymentTests -v
+```
+
+Verificare che tutti i test selezionati terminino con `ok` e che il
+riepilogo finale riporti `OK`, senza errori o fallimenti.
+
+Controllare nell'elenco i casi di:
+
+- risoluzione, lock o manifest non coerenti con il modello approvato;
+- errore nella costruzione o nel caricamento dell'immagine e nell'apply;
+- rollout incompleto o immagine in esecuzione diversa da quella verificata;
+- errore Kubernetes o HTTP, risposta di inferenza non valida o riavvio del pod;
+- mancata promozione dopo un errore e assenza di un risultato di rilascio
+  dichiarato riuscito.
+
+Per il gate fallito, usare l'esito già verificato in
+[Verificare una PR regressiva](#verificare-una-pr-regressiva).
