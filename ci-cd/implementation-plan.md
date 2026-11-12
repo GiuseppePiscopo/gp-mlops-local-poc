@@ -126,7 +126,7 @@ le evidenze sono in [design.md](design.md); la procedura operativa in costruzion
 - [x] Rifiuto/mancata approval: nessun deploy o aggiornamento champion.
 - [x] Errori di gate/render/immagine/readiness/inferenza: fallimento esplicito
   e champion invariato, senza dichiarare rollback automatico.
-- [ ] Test isolati di soglie bootstrap, errori Registry, champion presente o
+- [x] Test isolati di soglie bootstrap, errori Registry, champion presente o
   comparso durante approval; non cancellare l'alias reale.
 - [ ] Test isolato: cambio alias dopo snapshot non cambia il confronto fissato.
 - [ ] Verificare identità tra modello valutato, registrato e servito e immagini.

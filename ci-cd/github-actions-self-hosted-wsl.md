@@ -637,3 +637,47 @@ Controllare nell'elenco i casi di:
 
 Per il gate fallito, usare l'esito già verificato in
 [Verificare una PR regressiva](#verificare-una-pr-regressiva).
+
+## Verificare bootstrap e controlli Registry con test isolati
+
+In MLflow, aprire l'ultimo run di training e copiare il valore del tag
+`container.image`.
+
+In un terminale WSL, impostare il percorso del repository Windows e
+l'immagine copiata:
+
+```bash
+export GIT_REPOSITORY="/mnt/c/<percorso-repository>/mlops-local-poc"
+export IMAGE_TAG="<valore del tag container.image>"
+docker image inspect "$IMAGE_TAG" --format '{{.Id}}'
+```
+
+Verificare che l'immagine sia presente. Eseguire i test senza collegare il
+container alla rete del laboratorio e senza montare credenziali:
+
+```bash
+docker run --rm --network none \
+  --mount "type=bind,src=$GIT_REPOSITORY,dst=/workspace,readonly" \
+  --workdir /tmp \
+  -e PYTHONPATH=/workspace/training/src:/workspace/training/tests \
+  --entrypoint python \
+  "$IMAGE_TAG" \
+  -m unittest -v test_bootstrap test_deployment_checks test_deployment_integration
+```
+
+Verificare che tutti i 21 test terminino con `ok` e che il riepilogo finale
+riporti `OK`, senza errori o fallimenti.
+
+Controllare nell'elenco i casi di:
+
+- soglie bootstrap inclusive: `R2 >= 0.80` e `RMSE <= 300`, entrambe richieste;
+- rifiuto del bootstrap con `champion` già presente;
+- rifiuto di errori Registry o di rete, senza interpretarli come assenza di
+  `champion`;
+- rifiuto del deployment se `champion` cambia o compare durante l'attesa
+  dell'approvazione;
+- accettazione della versione esatta quando il riferimento è invariato;
+- promozione verificata di `champion`, senza modificare `baseline` e `candidate`.
+
+Non cancellare o modificare gli alias del Registry reale per eseguire
+questo scenario.
