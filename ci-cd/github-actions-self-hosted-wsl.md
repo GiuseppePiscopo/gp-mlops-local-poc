@@ -706,3 +706,161 @@ il confronto e il report usano ancora la versione `1` fissata nello
 snapshot, senza rileggere l'alias.
 
 Non modificare l'alias `champion` nel Registry reale.
+
+## Eseguire un rollback manuale
+
+### Selezionare il rilascio da ripristinare
+
+Verificare che non ci siano workflow in esecuzione o deployment in attesa di
+approvazione. Non avviare workflow o altri deploy durante il rollback.
+
+In MLflow, annotare le versioni correnti di `champion`, `candidate` e
+`baseline`. Eseguire i controlli dell'InferenceService e del ServingRuntime
+indicati in [Verificare il deployment](#verificare-il-deployment) e annotare
+versione, run sorgente, URI S3 e immagine runtime correnti.
+
+In **Actions**, scegliere una precedente esecuzione con deployment riuscito
+di una versione diversa da quella attualmente servita. Scaricare ed estrarre
+l'artifact `deployment-<run ID GitHub>-<run attempt>` fuori dal repository.
+
+Verificare i sei file come in
+[Verificare gli artefatti](#verificare-gli-artefatti). In MLflow, verificare che
+la versione da ripristinare sia ancora `READY` e che run sorgente e URI del
+modello coincidano con quelli dell'artifact.
+
+### Caricare l'immagine del rilascio precedente
+
+In un terminale WSL, impostare la directory estratta e la versione da
+ripristinare. Copiare in `IMAGE_TAG` il valore `images.serving.image` di
+`deployment-result.json`:
+
+```bash
+export ROLLBACK_DIR="/mnt/c/<directory-artefatto-estratto>"
+export ROLLBACK_VERSION="<versione da ripristinare>"
+export IMAGE_TAG="<images.serving.image>"
+export MANIFEST="$ROLLBACK_DIR/gp-mof-capstone-model-v$ROLLBACK_VERSION.yaml"
+
+docker image inspect "$IMAGE_TAG" --format '{{.Id}}'
+```
+
+Verificare che l'image ID sia uguale a `images.serving.image_id` di
+`deployment-result.json`. Se l'immagine non è disponibile o non coincide,
+interrompere lo scenario; non ricostruirla con lo stesso tag.
+
+Caricare l'immagine in KinD e controllarne l'identità nel nodo:
+
+```bash
+kind load docker-image "$IMAGE_TAG" --name mlops-test
+
+docker exec mlops-test-control-plane crictl inspecti "$IMAGE_TAG" |
+  python3 -c 'import json, sys; print(json.load(sys.stdin)["status"]["id"])'
+```
+
+Atteso: il valore di
+`kind_image.node_image_ids.mlops-test-control-plane` nell'artifact.
+
+### Riapplicare runtime e modello
+
+Verificare che il Secret S3 sia aggiornato seguendo
+[Applicare il Secret S3](../serving/serving-kserve-model.md#applicare-il-secret-s3).
+
+Validare entrambi i manifest prima di applicarli:
+
+```bash
+kubectl --context kind-mlops-test apply --dry-run=server \
+  -f "$ROLLBACK_DIR/20-serving-runtime.yaml"
+kubectl --context kind-mlops-test apply --dry-run=server -f "$MANIFEST"
+```
+
+Procedere soltanto se entrambe le validazioni terminano senza errori:
+
+```bash
+kubectl --context kind-mlops-test apply \
+  -f "$ROLLBACK_DIR/20-serving-runtime.yaml"
+kubectl --context kind-mlops-test apply -f "$MANIFEST"
+```
+
+Attendere che il Deployment recepisca la versione e l'immagine del rollback:
+
+```bash
+kubectl --context kind-mlops-test -n gp-mof-capstone-serving \
+  wait deployment/gp-mof-capstone-model-predictor \
+  "--for=jsonpath={.spec.template.metadata.annotations.mlops\.gp-mof\.dev/resolved-version}=$ROLLBACK_VERSION" \
+  --timeout=60s
+
+kubectl --context kind-mlops-test -n gp-mof-capstone-serving \
+  wait deployment/gp-mof-capstone-model-predictor \
+  "--for=jsonpath={.spec.template.spec.containers[?(@.name==\"kserve-container\")].image}=$IMAGE_TAG" \
+  --timeout=60s
+
+kubectl --context kind-mlops-test -n gp-mof-capstone-serving \
+  rollout status deployment/gp-mof-capstone-model-predictor --timeout=60s
+
+kubectl --context kind-mlops-test -n gp-mof-capstone-serving \
+  wait --for=condition=Ready inferenceservice/gp-mof-capstone-model --timeout=60s
+```
+
+Atteso: i due controlli JSONPath e il controllo `Ready` terminano con
+`condition met`; il rollout termina con `successfully rolled out`. Se un
+comando fallisce o scade il timeout, interrompere lo scenario senza modificare
+`champion`.
+
+Verificare versione, run sorgente, URI S3 e
+immagine runtime con i comandi di
+[Verificare il deployment](#verificare-il-deployment). Atteso: i riferimenti
+del rilascio selezionato, non quelli annotati prima del rollback.
+
+Eseguire il controllo dell'immagine del pod indicato in
+[Applicare l'InferenceService e attendere](../serving/serving-kserve-model.md#applicare-linferenceservice-e-attendere).
+Verificare che il pod pronto usi l'immagine `IMAGE_TAG` del rollback.
+
+Controllare anche versione e run sorgente dei pod:
+
+```bash
+kubectl --context kind-mlops-test -n gp-mof-capstone-serving \
+  get pods -l app=isvc.gp-mof-capstone-model-predictor \
+  -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.metadata.annotations.mlops\.gp-mof\.dev/resolved-version}{"\t"}{.metadata.annotations.mlops\.gp-mof\.dev/source-run-id}{"\t"}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}'
+```
+
+Prima di provare l'inferenza, verificare che rimanga un solo pod predictor
+pronto, con la versione e il run sorgente del rilascio ripristinato.
+
+Eseguire la prova di
+[Verificare il modello e l'inferenza V2](../serving/serving-kserve-model.md#verificare-il-modello-e-linferenza-v2).
+Usare l'esempio recuperato dal modello ripristinato; verificare risposte HTTP
+`200`, nome `gp-mof-capstone-model` e una predizione numerica finita per ogni
+riga dell'esempio. Non confrontare le predizioni con i valori dell'esempio
+V1 riportato nella procedura di serving. Terminare il port-forward al
+predictor al termine della prova.
+
+In caso di errore o timeout, interrompere lo scenario senza modificare
+`champion`. Controllare servizio e Registry prima di riprovare.
+
+### Riallineare champion al modello ripristinato
+
+Solo dopo readiness e inferenza riuscite, verificare in MLflow che
+`champion` punti ancora alla versione annotata prima del rollback e
+aggiornarlo alla versione ripristinata:
+
+```bash
+curl --fail --silent --show-error \
+  -X POST \
+  -H 'Host: localhost:5000' \
+  -H 'Content-Type: application/json' \
+  -d "{\"name\":\"gp-mof-capstone-model\",\"alias\":\"champion\",\"version\":\"$ROLLBACK_VERSION\"}" \
+  'http://127.0.0.1:5000/api/2.0/mlflow/registered-models/alias'
+```
+
+Atteso: risposta `{}`. Rileggere gli alias:
+
+```bash
+curl --fail --silent --show-error \
+  -H 'Host: localhost:5000' \
+  'http://127.0.0.1:5000/api/2.0/mlflow/registered-models/get?name=gp-mof-capstone-model'
+```
+
+Verificare che `champion` punti a `ROLLBACK_VERSION` e che `candidate` e
+`baseline` siano invariati. In caso di errore della chiamata di aggiornamento,
+rileggere comunque gli alias prima di riprovare.
+
+Confermare che l'InferenceService serva ancora la versione ripristinata.

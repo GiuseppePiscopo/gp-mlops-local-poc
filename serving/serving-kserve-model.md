@@ -307,6 +307,7 @@ curl --fail --silent --show-error --max-time 10 \
   -w '%{http_code}\n' \
   http://127.0.0.1:8082/v2/models/gp-mof-capstone-model \
   -o runtime/model-metadata.json
+
 ./scripts/show-model-metadata.py runtime/model-metadata.json
 ```
 
