@@ -479,7 +479,7 @@ git switch -c experiment/tune-model-1 --no-track github/main
   -replace '--max-depth 10', '--max-depth 1' |
   Set-Content .\.github\workflows\ml-pipeline.yml
 
-git commit -am "test(ci-cd): degrada intenzionalmente il modello"
+git commit -am "test(ci-cd): degrada intenzionalmente il modello nr 1"
 
 git push --set-upstream github experiment/tune-model-1
 
@@ -506,15 +506,18 @@ dell'InferenceService siano invariati. Se il gate passa, non eseguire il merge.
 
 ## Correggere una PR regressiva
 
-Correggere gli stessi parametri nella stessa PR:
+Correggere gli stessi parametri nella stessa PR e aggiungere un commento
+dummy al training:
 
 ```powershell
 (Get-Content .\.github\workflows\ml-pipeline.yml) `
-  -replace '--n-estimators 1', '--n-estimators 100' `
-  -replace '--max-depth 1', '--max-depth 10' |
+  -replace '--n-estimators 1(?=\s|$)', '--n-estimators 100' `
+  -replace '--max-depth 1(?=\s|$)', '--max-depth 10' |
   Set-Content .\.github\workflows\ml-pipeline.yml
 
-git commit -am "fix(ci-cd): ripristina i parametri del modello"
+Add-Content .\training\src\random_forest\train.py "`n# regression recovery check nr 1"
+
+git commit -am "fix(ci-cd): ripristina i parametri del modello nr 1"
 
 git push github experiment/tune-model-1
 ```
