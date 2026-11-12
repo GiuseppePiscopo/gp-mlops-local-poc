@@ -681,3 +681,28 @@ Controllare nell'elenco i casi di:
 
 Non cancellare o modificare gli alias del Registry reale per eseguire
 questo scenario.
+
+## Verificare il riferimento champion fissato dallo snapshot
+
+In un terminale WSL, mantenere `GIT_REPOSITORY` e `IMAGE_TAG` impostati come
+nel capitolo precedente ed eseguire:
+
+```bash
+docker run --rm --network none \
+  --mount "type=bind,src=$GIT_REPOSITORY,dst=/workspace,readonly" \
+  --workdir /tmp \
+  -e PYTHONPATH=/workspace/training/src:/workspace/training/tests \
+  --entrypoint python \
+  "$IMAGE_TAG" \
+  -m unittest -v \
+  test_evaluation.EvaluationTests.test_snapshot_is_resolved_once_and_alias_change_does_not_change_gate
+```
+
+Verificare che il test termini con `ok` e che il riepilogo riporti
+`Ran 1 test` e `OK`, senza errori o fallimenti.
+
+Atteso: dopo il cambio simulato di `champion` dalla versione `1` alla `2`,
+il confronto e il report usano ancora la versione `1` fissata nello
+snapshot, senza rileggere l'alias.
+
+Non modificare l'alias `champion` nel Registry reale.

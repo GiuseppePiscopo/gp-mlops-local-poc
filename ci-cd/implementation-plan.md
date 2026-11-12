@@ -128,7 +128,7 @@ le evidenze sono in [design.md](design.md); la procedura operativa in costruzion
   e champion invariato, senza dichiarare rollback automatico.
 - [x] Test isolati di soglie bootstrap, errori Registry, champion presente o
   comparso durante approval; non cancellare l'alias reale.
-- [ ] Test isolato: cambio alias dopo snapshot non cambia il confronto fissato.
+- [x] Test isolato: cambio alias dopo snapshot non cambia il confronto fissato.
 - [ ] Verificare identità tra modello valutato, registrato e servito e immagini.
 - [ ] Verificare e documentare rollback manuale, senza automatizzarlo.
 
