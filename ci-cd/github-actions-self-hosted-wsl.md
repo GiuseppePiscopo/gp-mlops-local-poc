@@ -411,7 +411,7 @@ git commit -m "chore(ci-cd): verifica scenario con PR e merge nr 1"
 
 git push --set-upstream github feature/pr-trigger-check-1
 
-gh pr create --repo GiuseppePiscopo/mlops-local-poc --base main --head feature/pr-trigger-check-1 --title "Verifica trigger CI su PR nr 1" --body "Modifica dummy per verificare il workflow su PR."
+gh pr create --repo GiuseppePiscopo/gp-mlops-local-poc --base main --head feature/pr-trigger-check-1 --title "Verifica trigger CI su PR nr 1" --body "Modifica dummy per verificare il workflow su PR."
 ```
 
 In **Actions**, aprire la run della PR. Verificare che l'evento sia
@@ -441,7 +441,7 @@ Dopo aver verificato il run della PR, eseguire il merge senza bypassare gli
 eventuali controlli di protezione del branch:
 
 ```powershell
-gh pr merge feature/pr-trigger-check-1 --repo GiuseppePiscopo/mlops-local-poc --squash --delete-branch
+gh pr merge feature/pr-trigger-check-1 --repo GiuseppePiscopo/gp-mlops-local-poc --squash --delete-branch
 ```
 
 In **Actions**, aprire il nuovo run su `main` e verificare che l'evento sia
@@ -451,3 +451,12 @@ sezione **Model registration** riporti la nuova versione `candidate`.
 Verificare che il job **Deploy** attenda l'approvazione per l'environment
 `production`; quindi completare le verifiche e l'approvazione indicate in
 [Approvare e applicare il deployment](#approvare-e-applicare-il-deployment).
+
+A deployment completato, sincronizzare `main` locale e rimuovere il branch
+locale dello scenario:
+
+```powershell
+git switch main
+git pull --ff-only github main
+git branch -D feature/pr-trigger-check-1
+```
