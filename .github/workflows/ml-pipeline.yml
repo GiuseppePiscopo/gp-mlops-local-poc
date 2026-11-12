@@ -268,3 +268,16 @@ jobs:
             --event-name "$GITHUB_EVENT_NAME" \
             --git-ref "$GITHUB_REF" \
             --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload deployment results
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: deployment-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/${{ env.DEPLOYMENT_DIRECTORY }}/${{ env.REGISTERED_MODEL }}-v${{ env.MODEL_VERSION }}.yaml
+            ${{ runner.temp }}/${{ env.DEPLOYMENT_DIRECTORY }}/${{ env.REGISTERED_MODEL }}-v${{ env.MODEL_VERSION }}.resolution.json
+            ${{ runner.temp }}/${{ env.DEPLOYMENT_DIRECTORY }}/20-serving-runtime.yaml
+            ${{ runner.temp }}/${{ env.DEPLOYMENT_DIRECTORY }}/deployment-result.json
+            ${{ runner.temp }}/${{ env.DEPLOYMENT_DIRECTORY }}/verification-result.json
+            ${{ runner.temp }}/${{ env.DEPLOYMENT_DIRECTORY }}/release-result.json
+          if-no-files-found: error

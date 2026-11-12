@@ -333,8 +333,10 @@ class PredictorHttpTests(unittest.TestCase):
         thread = threading.Thread(target=server.serve_forever)
         thread.start()
         try:
-            code = verification.HTTP_REQUEST.replace("http://127.0.0.1:8080", f"http://127.0.0.1:{server.server_port}")
-            with patch.object(verification, "HTTP_REQUEST", code):
+            code = verification.POD_HTTP_CLIENT.replace(
+                "http://127.0.0.1:8080", f"http://127.0.0.1:{server.server_port}"
+            )
+            with patch.object(verification, "POD_HTTP_CLIENT", code):
                 verification.check_model_ready([], "/model")
                 self.assertEqual(verification.get_model_metadata([], "/model"), {"name": "model", "inputs": []})
                 reply = verification.infer_model([], "/model", '{"inputs":[]}')

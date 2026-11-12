@@ -354,6 +354,33 @@ In MLflow, aprire **Models > gp-mof-capstone-model** e verificare che
 `champion` punti alla versione della sezione **Model registration**.
 Controllare anche che il deploy non abbia modificato `baseline` o `candidate`.
 
+Nella sezione **Artifacts** dell'esecuzione GitHub, scaricare
+`deployment-<run ID GitHub>-<run attempt>` e verificare i sei file:
+
+- `gp-mof-capstone-model-v<versione>.yaml`: versione, run e URI S3 uguali
+  alle verifiche precedenti sull'InferenceService;
+- `gp-mof-capstone-model-v<versione>.resolution.json`: stessa versione e
+  provenance del manifest, con `requested_version` valorizzato e
+  `requested_alias` uguale a `null`;
+- `20-serving-runtime.yaml`: immagine uguale a **Runtime image** del Summary;
+- `deployment-result.json`: `status` uguale a `APPLIED`, modello, versione,
+  run, URI e commit uguali al Summary; riferimenti e identità delle immagini
+  in `images`, identità dell'immagine caricata nei nodi in `kind_image`;
+- `verification-result.json`: `status` uguale a `VERIFIED`, stessi riferimenti
+  del modello, pod e image ID uguali a **Deployment verification**, numero
+  di righe e predizioni uguali al Summary;
+- `release-result.json`: `status` uguale a `DEPLOYED`, stessi dati della
+  verifica e `promotion.status` uguale a `PROMOTED`, con versione e champion
+  precedente uguali al Summary.
+
+Atteso: nessun Secret, kubeconfig, credenziale, esempio di input o payload
+di inferenza nell'archivio.
+
+Confrontare modello, versione, run, URI e commit dei risultati di deployment
+con `registration-result.json`, `training-result.json` ed
+`evaluation-report.json` nell'artifact `training-evaluation` della stessa
+esecuzione. Atteso: tutti i riferimenti coincidono.
+
 Se il job fallisce, controllare il servizio con i comandi precedenti e
 l'alias `champion` in MLflow prima di riprovare. Non presumere un ripristino
 automatico.
