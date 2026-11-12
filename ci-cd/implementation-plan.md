@@ -119,7 +119,7 @@ le evidenze sono in [design.md](design.md); la procedura operativa in costruzion
 
 ## 5. Verificare i percorsi
 
-- [ ] PR migliorativa: gate superato, nessuna registrazione o deploy.
+- [x] PR migliorativa: gate superato, nessuna registrazione o deploy.
 - [ ] Seconda PR regressiva: gate fallito; correzione sulla stessa PR e nuovo
   push: gate superato. Controllare riferimenti e dati dei report.
 - [ ] Main e manuale: registrazione post-gate, attesa approval e deploy riuscito.
