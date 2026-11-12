@@ -45,7 +45,7 @@ All'interno di questa fase, gli 8 passaggi concettuali della "vertical slice" er
 - Batch schedulato con `CronJob` giornaliero, metriche `model_quality_*` via Pushgateway in Prometheus e dashboard Grafana del drift.
 
 **CI/CD — GitHub Actions con runner WSL**
-- Build delle immagini dal checkout Git con tag per commit e controlli di provenance; training ed evaluation orchestrati da GitHub Actions su runner self-hosted WSL ([procedura](ci-cd/github-actions-self-hosted-wsl.md)).
+- Build delle immagini dal checkout Git con tag per commit e controlli di provenance; training ed evaluation orchestrati da GitHub Actions su runner self-hosted WSL ([procedura](ci-cd/github-actions-self-hosted-wsl.md), [decisioni progettuali](ci-cd/design.md)).
 - Gate relativo sullo stesso test set: RMSE candidato minore o uguale al RMSE del `champion` fissato nello snapshot; PR fidate senza registrazione o deploy.
 - Su push a `main` o avvio manuale, registrazione post-gate della nuova versione `candidate`, approvazione nell'environment `production` e deployment della versione esatta in KinD.
 - Verifica di readiness, identità del modello e dell'immagine, inferenza V2 e promozione a `champion` solo al successo; report, manifest e lock conservati come artifact della stessa esecuzione.

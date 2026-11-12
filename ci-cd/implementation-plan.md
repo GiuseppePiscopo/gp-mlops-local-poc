@@ -1,7 +1,7 @@
 # Piano di implementazione CI/CD locale
 
 Documento temporaneo per avanzamento e ripresa delle sessioni. I contratti e
-le evidenze sono in [design.md](design.md); la procedura operativa in costruzione
+le evidenze sono in [design.md](design.md); la procedura operativa
 è [github-actions-self-hosted-wsl.md](github-actions-self-hosted-wsl.md).
 
 ## Indice della progettazione
@@ -9,14 +9,11 @@ le evidenze sono in [design.md](design.md); la procedura operativa in costruzion
 - [Architettura e perimetro](design.md#architettura-e-perimetro)
 - [Configurazione e accessi del runner](design.md#configurazione-e-accessi-del-runner)
 - [PR fidate e permessi](design.md#pr-fidate-e-permessi)
-- [Stato iniziale](design.md#stato-iniziale)
 - [Training, evaluation e registrazione](design.md#training-evaluation-e-registrazione)
 - [Identificazione e passaggio tra job](design.md#identificazione-e-passaggio-tra-job)
 - [Confronto e prove PR](design.md#confronto-e-prove-pr)
 - [Bootstrap ed evidenze locali](design.md#bootstrap-ed-evidenze-locali)
 - [Tag e identità immagini](design.md#tag-e-identità-immagini)
-- [Riferimento Azure ML](design.md#riferimento-azure-ml)
-- [Accesso operativo e port-forward](design.md#accesso-operativo-e-port-forward)
 
 ## 1. Definire i contratti di training ed evaluation
 
@@ -138,7 +135,7 @@ le evidenze sono in [design.md](design.md); la procedura operativa in costruzion
   protezioni GitHub, configurazione, trigger, comandi, immagini, verifiche,
   troubleshooting, sicurezza e rollback manuale.
 - [x] Aggiornare [roadmap.md](../roadmap.md) solo dopo verifica della CI/CD.
-- [ ] Allineare procedura e roadmap ai risultati effettivi; trasferire le
+- [x] Allineare procedura e roadmap ai risultati effettivi; trasferire le
   decisioni ancora utili dal design nella documentazione stabile.
 - [ ] Rimuovere questo piano quando procedura e roadmap sono complete;
   mantenere il design solo per decisioni non già spiegate nella procedura.
