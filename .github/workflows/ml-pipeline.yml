@@ -4,8 +4,26 @@ on:
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened]
+    paths:
+      - '.gitattributes'
+      - '.github/workflows/ml-pipeline.yml'
+      - 'training/**'
+      - 'ci-cd/scripts/**'
+      - 'serving/**'
+      - 'deployment/**'
+      - '!**/*.md'
+      - '!**/tests/**'
   push:
     branches: [main]
+    paths:
+      - '.gitattributes'
+      - '.github/workflows/ml-pipeline.yml'
+      - 'training/**'
+      - 'ci-cd/scripts/**'
+      - 'serving/**'
+      - 'deployment/**'
+      - '!**/*.md'
+      - '!**/tests/**'
   workflow_dispatch:
     inputs:
       bootstrap:
