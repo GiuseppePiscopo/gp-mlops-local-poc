@@ -114,8 +114,8 @@ jobs:
             --input-snapshot "$RUNNER_TEMP/$TRAINING_SNAPSHOT/snapshot.json" \
             --test-set-directory "$RUNNER_TEMP/$TEST_SET_WORKSPACE/data" \
             --result-json "$RUNNER_TEMP/$TRAINING_RESULT" \
-            --n-estimators 1 \
-            --max-depth 1
+            --n-estimators 100 \
+            --max-depth 10
 
       - name: Evaluate candidate
         id: evaluation
