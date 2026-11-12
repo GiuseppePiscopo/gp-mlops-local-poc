@@ -72,21 +72,22 @@ regola per il branch `main`. Non aggiungere secrets o variables.
 
 ## Configurare il remote GitHub
 
-Nel repository locale, verificare i remote:
+Eseguire i comandi Git in PowerShell dalla root del repository Windows.
+Verificare i remote:
 
-```bash
+```powershell
 git remote -v
 ```
 
 Se manca `github`, aggiungerlo:
 
-```bash
+```powershell
 git remote add github https://github.com/GiuseppePiscopo/gp-mlops-local-poc.git
 ```
 
 Verificare la destinazione dei push:
 
-```bash
+```powershell
 git remote get-url --push github
 git remote get-url --push origin
 ```
@@ -96,7 +97,7 @@ Atteso: `github` punta a `https://github.com/GiuseppePiscopo/gp-mlops-local-poc.
 
 Per inviare modifiche a GitHub, specificare sempre il remote:
 
-```bash
+```powershell
 git push github main
 ```
 
@@ -180,7 +181,7 @@ Per aggiornare il Secret S3 e verificarne l'endpoint, seguire
 
 Inviare al branch `main` di GitHub i commit da verificare:
 
-```bash
+```powershell
 git push github main
 ```
 
@@ -286,6 +287,8 @@ Atteso: l'archivio contiene soltanto i quattro JSON, senza `test-data.json`.
 
 ## Approvare e applicare il deployment
 
+### Approvare il workflow
+
 Nel dettaglio dell'esecuzione GitHub, verificare che **Train and evaluate**
 sia completato con successo e **Deploy** sia in attesa di
 review per l'environment `production`.
@@ -295,6 +298,8 @@ verifica. Durante il job non eseguire deploy o modifiche manuali a champion.
 
 Aprire **Review deployments**, selezionare `production` e premere
 **Approve and deploy**.
+
+### Verificare il deployment
 
 Verificare il successo del job **Deploy** e, nel Summary,
 la sezione **Production approval**:
@@ -354,6 +359,8 @@ In MLflow, aprire **Models > gp-mof-capstone-model** e verificare che
 `champion` punti alla versione della sezione **Model registration**.
 Controllare anche che il deploy non abbia modificato `baseline` o `candidate`.
 
+### Verificare gli artefatti
+
 Nella sezione **Artifacts** dell'esecuzione GitHub, scaricare
 `deployment-<run ID GitHub>-<run attempt>` e verificare i sei file:
 
@@ -384,3 +391,63 @@ esecuzione. Atteso: tutti i riferimenti coincidono.
 Se il job fallisce, controllare il servizio con i comandi precedenti e
 l'alias `champion` in MLflow prima di riprovare. Non presumere un ripristino
 automatico.
+
+## Verificare il workflow su PR e merge
+
+Creare un branch da `github/main` e aggiungere un commento dummy a un file
+del training. La modifica non deve peggiorare il comportamento del modello.
+Usare una PR dallo stesso repository, aperta con l'account
+`GiuseppePiscopo`. Eseguire i comandi Git e GitHub CLI in PowerShell dalla
+root del repository Windows.
+
+```powershell
+git fetch github
+
+git switch -c feature/pr-trigger-check-1 --no-track github/main
+
+Add-Content .\training\src\random_forest\train.py "`n# trigger check nr 1"
+git add .\training\src\random_forest\train.py
+git commit -m "chore(ci-cd): verifica scenario con PR e merge nr 1"
+
+git push --set-upstream github feature/pr-trigger-check-1
+
+gh pr create --repo GiuseppePiscopo/mlops-local-poc --base main --head feature/pr-trigger-check-1 --title "Verifica trigger CI su PR nr 1" --body "Modifica dummy per verificare il workflow su PR."
+```
+
+In **Actions**, aprire la run della PR. Verificare che l'evento sia
+`pull_request` e attendere il completamento. Il gate relativo passa se l'RMSE
+del candidato è minore o uguale a quello di `champion`; non è necessario che
+il candidato migliori le metriche.
+
+Verificare che:
+
+- il job **Train and evaluate** termini con successo e il Summary riporti
+  **Relative evaluation** con `Passed` uguale a `True`;
+- non venga eseguito il passo **Register evaluated model as candidate**;
+- il job **Deploy** non venga eseguito.
+
+Scaricare l'artifact `training-evaluation-<run ID GitHub>-<run attempt>` e
+verificare che contenga soltanto:
+
+- `training-result.json`;
+- `evaluation-report.json`, con `passed` uguale a `true`;
+- `execution.json`, con `evaluation_passed` uguale a `true` e senza
+  `registered_model` o `model_version`.
+
+In MLflow, verificare che la run della PR non abbia creato una nuova Model
+Version e che gli alias `candidate`, `champion` e `baseline` siano invariati.
+
+Dopo aver verificato il run della PR, eseguire il merge senza bypassare gli
+eventuali controlli di protezione del branch:
+
+```powershell
+gh pr merge feature/pr-trigger-check-1 --repo GiuseppePiscopo/mlops-local-poc --squash --delete-branch
+```
+
+In **Actions**, aprire il nuovo run su `main` e verificare che l'evento sia
+`push`. Attendere il completamento del job **Train and evaluate** e
+controllare che il gate relativo abbia `Passed` uguale a `True` e che la
+sezione **Model registration** riporti la nuova versione `candidate`.
+Verificare che il job **Deploy** attenda l'approvazione per l'environment
+`production`; quindi completare le verifiche e l'approvazione indicate in
+[Approvare e applicare il deployment](#approvare-e-applicare-il-deployment).
