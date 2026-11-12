@@ -9,7 +9,9 @@ a `champion`.
 ## Prerequisiti
 
 - Ubuntu WSL2 x64, utente non root, Docker Desktop con integrazione WSL;
-- Git, Git LFS, `python3` >= 3.11, `kind`, `kubectl` e `curl` disponibili in WSL;
+- **WSL:** Git, Git LFS, `python3` >= 3.11, `kind`, `kubectl` e `curl`;
+- **Windows (PowerShell):** Git, Git LFS, GitHub CLI (`gh`) autenticata e
+  Python >= 3.11 (`python`);
 - repository già configurato per LFS, con file LFS scaricati;
 - repository GitHub `GiuseppePiscopo/gp-mlops-local-poc` pubblico, con accesso
   amministratore;
@@ -22,8 +24,9 @@ a `champion`.
 - credenziali locali in `/opt/mlops-local-poc/mlflow/.env` e kubeconfig
   dell'utente WSL in `$HOME/.kube/config`.
 
-Tutti i comandi si eseguono in **Bash in WSL**, salvo le operazioni indicate
-nell'interfaccia GitHub.
+Eseguire i blocchi `powershell` in **PowerShell su Windows** e i blocchi
+`bash` in **WSL**, nei terminali indicati. Eseguire le operazioni GitHub
+descritte senza comandi nell'interfaccia web.
 
 ## Avvertenze operative
 
@@ -864,3 +867,40 @@ Verificare che `champion` punti a `ROLLBACK_VERSION` e che `candidate` e
 rileggere comunque gli alias prima di riprovare.
 
 Confermare che l'InferenceService serva ancora la versione ripristinata.
+
+## Diagnosticare un'esecuzione fallita
+
+In **Actions**, aprire l'esecuzione da diagnosticare e annotarne l'ID
+dall'URL. In PowerShell su Windows, leggere lo stato e i log dei passi
+falliti:
+
+```powershell
+$runId = "<ID esecuzione GitHub>"
+gh run view $runId --repo GiuseppePiscopo/gp-mlops-local-poc
+gh run view $runId --repo GiuseppePiscopo/gp-mlops-local-poc --log-failed
+```
+
+- Se il job attende un runner, verificare `mlops-wsl` e le sue etichette in
+  **Settings > Actions > Runners**, poi seguire
+  [Avviare il runner](#avviare-il-runner).
+- Per errori di checkout, dataset, Docker o kubeconfig, ripetere
+  [Verificare gli accessi locali](#verificare-gli-accessi-locali) e
+  [Verificare il checkout in WSL](#verificare-il-checkout-in-wsl).
+- Se il gate fallisce, confrontare gli RMSE in **Relative evaluation** e in
+  `evaluation-report.json`; correggere il candidato prima di una nuova
+  esecuzione.
+- Per errori Registry o riferimenti obsoleti, verificare versione, stato,
+  run sorgente e alias `champion` in MLflow rispetto al report della run.
+  Se `champion` non coincide con il riferimento valutato, avviare un nuovo
+  workflow su `main` con una nuova evaluation; non riapprovare il vecchio
+  rilascio.
+- Per errori di readiness, immagini, storage o inferenza, seguire
+  [Diagnostica essenziale](../serving/serving-kserve-model.md#diagnostica-essenziale).
+  Verificare immagine e modello del rilascio interessato prima di
+  ricostruire o riapplicare risorse.
+
+Dopo un errore del job **Deploy**, controllare servizio e alias con i
+comandi di [Verificare il deployment](#verificare-il-deployment). Prima di
+avviare un altro deploy, verificare che versione servita e `champion`
+coincidano; se occorre ripristinare un rilascio precedente, seguire
+[Eseguire un rollback manuale](#eseguire-un-rollback-manuale).

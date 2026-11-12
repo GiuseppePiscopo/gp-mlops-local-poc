@@ -134,7 +134,7 @@ le evidenze sono in [design.md](design.md); la procedura operativa in costruzion
 
 ## 6. Documentare e chiudere
 
-- [ ] Scrivere `github-actions-self-hosted-wsl.md`: prerequisiti, runner,
+- [x] Scrivere `github-actions-self-hosted-wsl.md`: prerequisiti, runner,
   protezioni GitHub, configurazione, trigger, comandi, immagini, verifiche,
   troubleshooting, sicurezza e rollback manuale.
 - [ ] Aggiornare [roadmap.md](../roadmap.md) solo dopo verifica della CI/CD.
