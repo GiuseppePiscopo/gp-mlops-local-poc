@@ -120,10 +120,10 @@ le evidenze sono in [design.md](design.md); la procedura operativa in costruzion
 ## 5. Verificare i percorsi
 
 - [x] PR migliorativa: gate superato, nessuna registrazione o deploy.
-- [ ] Seconda PR regressiva: gate fallito; correzione sulla stessa PR e nuovo
+- [x] Seconda PR regressiva: gate fallito; correzione sulla stessa PR e nuovo
   push: gate superato. Controllare riferimenti e dati dei report.
-- [ ] Main e manuale: registrazione post-gate, attesa approval e deploy riuscito.
-- [ ] Rifiuto/mancata approval: nessun deploy o aggiornamento champion.
+- [x] Main e manuale: registrazione post-gate, attesa approval e deploy riuscito.
+- [x] Rifiuto/mancata approval: nessun deploy o aggiornamento champion.
 - [ ] Errori di gate/render/immagine/readiness/inferenza: fallimento esplicito
   e champion invariato, senza dichiarare rollback automatico.
 - [ ] Test isolati di soglie bootstrap, errori Registry, champion presente o

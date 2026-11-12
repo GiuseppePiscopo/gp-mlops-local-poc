@@ -556,3 +556,58 @@ git switch main
 git pull --ff-only github main
 git branch -D experiment/tune-model-1
 ```
+
+## Verificare l'attesa e il rifiuto dell'approvazione
+
+Prima di avviare lo scenario, verificare che non ci siano altri workflow in
+esecuzione o deployment in attesa di approvazione. Non eseguire deploy o
+modifiche manuali agli alias durante la verifica.
+
+In MLflow, annotare le versioni degli alias `candidate`, `champion` e
+`baseline` del modello `gp-mof-capstone-model`.
+
+In un terminale WSL, eseguire i comandi di controllo dell'InferenceService e
+del ServingRuntime indicati in
+[Verificare il deployment](#verificare-il-deployment). Annotare versione,
+run sorgente, URI S3 e immagine runtime.
+
+Avviare una nuova esecuzione manuale su `main` e completare le verifiche di
+[Avviare training ed evaluation](#avviare-training-ed-evaluation), senza
+approvare il deployment.
+
+### Verificare l'attesa dell'approvazione
+
+Aprire l'esecuzione GitHub e verificare che **Train and evaluate** sia
+completato con successo e **Deploy** sia in attesa della review per
+`production`.
+
+In MLflow, verificare che:
+
+- esista la nuova Model Version indicata in **Model registration**;
+- `candidate` punti alla nuova versione;
+- `champion` e `baseline` puntino ancora alle versioni annotate.
+
+Ripetere i controlli dell'InferenceService e del ServingRuntime. Verificare
+che versione, run sorgente, URI S3 e immagine runtime siano invariati.
+
+### Rifiutare il deployment
+
+Nel dettaglio della stessa esecuzione GitHub, aprire **Review deployments**,
+selezionare `production`, inserire un commento per lo scenario e premere
+**Reject**.
+
+Attendere la conclusione della run e verificare che:
+
+- il job **Train and evaluate** sia ancora concluso con successo;
+- il deployment risulti rifiutato e il job **Deploy** non abbia eseguito
+  i passi di controllo, apply, verifica o promozione;
+- sia presente l'artifact `training-evaluation-<run ID GitHub>-<run attempt>`;
+- non sia presente l'artifact `deployment-<run ID GitHub>-<run attempt>`.
+
+In MLflow, verificare che la nuova Model Version sia ancora `READY` e che
+`candidate` punti ancora a essa. Verificare che `champion` e `baseline` siano
+invariati rispetto all'inizio dello scenario.
+
+Ripetere i controlli dell'InferenceService e del ServingRuntime. Verificare
+che versione, run sorgente, URI S3 e immagine runtime coincidano con quelli
+annotati prima dell'esecuzione.
