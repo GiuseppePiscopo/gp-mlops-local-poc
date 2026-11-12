@@ -19,7 +19,7 @@ All'interno di questa fase, gli 8 passaggi concettuali della "vertical slice" er
 6. Selezione/promozione (alias `baseline`/`candidate`/`champion`)
 
 **Deployment — risoluzione MLflow e rendering del manifest KServe**
-- Risoluzione dell'alias MLflow, verifica dello stato della versione, traduzione dell'URI degli artefatti in URI S3 e generazione del manifest `InferenceService` con lock JSON di provenance.
+- Selezione tramite alias MLflow o versione esplicita, verifica dello stato della versione, traduzione dell'URI degli artefatti in URI S3 e generazione del manifest `InferenceService` con lock JSON di provenance.
 
 **Serving KServe**
 - Modello registrato servito tramite `InferenceService` con `modelFormat: mlflow` e protocollo V2, su un `ServingRuntime` namespaced dedicato (immagine MLServer con dipendenze allineate al modello), accesso agli artefatti S3 tramite Secret e ServiceAccount.
@@ -44,14 +44,20 @@ All'interno di questa fase, gli 8 passaggi concettuali della "vertical slice" er
 - Export giornaliero dei log su SeaweedFS, reference dataset V1 versionato con lock, calcolo PSI su feature e predizioni ([procedura](model-quality/model-quality-setup.md)).
 - Batch schedulato con `CronJob` giornaliero, metriche `model_quality_*` via Pushgateway in Prometheus e dashboard Grafana del drift.
 
+**CI/CD — GitHub Actions con runner WSL**
+- Build delle immagini dal checkout Git con tag per commit e controlli di provenance; training ed evaluation orchestrati da GitHub Actions su runner self-hosted WSL ([procedura](ci-cd/github-actions-self-hosted-wsl.md)).
+- Gate relativo sullo stesso test set: RMSE candidato minore o uguale al RMSE del `champion` fissato nello snapshot; PR fidate senza registrazione o deploy.
+- Su push a `main` o avvio manuale, registrazione post-gate della nuova versione `candidate`, approvazione nell'environment `production` e deployment della versione esatta in KinD.
+- Verifica di readiness, identità del modello e dell'immagine, inferenza V2 e promozione a `champion` solo al successo; report, manifest e lock conservati come artifact della stessa esecuzione.
+- Verificati gli scenari PR, regressione/correzione, main/manuale, rifiuto dell'approvazione e rollback manuale di modello e runtime; verificati con test isolati gli errori di deployment, il bootstrap, i controlli Registry e il riferimento fissato dallo snapshot.
+
 ## Prossimi sviluppi
 
 - **Grafana** — persistenza su PVC: dimensionamento minimo e migrazione della configurazione attuale.
 
 ## Estensioni successive
 
-- **CI/CD** — automazione di build delle immagini, training, registrazione, rendering e applicazione del manifest
-- **Promozione e rollback** — cambio controllato della versione servita, rilascio graduale e ritorno alla versione precedente (rollback automatico)
+- **Rilascio graduale e rollback automatico** — estendere il deployment e il rollback manuale già disponibili
 - **Riaddestramento** — trigger da monitoring o da nuovi dati, con nuova versione nel Model Registry
 - **Alerting** — soglie sulle metriche di drift e qualità, notifiche e trigger automatici
 - **Esposizione e sicurezza** — accesso al servizio senza port-forward manuale, autenticazione, gestione dei segreti

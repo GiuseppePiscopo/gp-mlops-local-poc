@@ -137,7 +137,7 @@ le evidenze sono in [design.md](design.md); la procedura operativa in costruzion
 - [x] Scrivere `github-actions-self-hosted-wsl.md`: prerequisiti, runner,
   protezioni GitHub, configurazione, trigger, comandi, immagini, verifiche,
   troubleshooting, sicurezza e rollback manuale.
-- [ ] Aggiornare [roadmap.md](../roadmap.md) solo dopo verifica della CI/CD.
+- [x] Aggiornare [roadmap.md](../roadmap.md) solo dopo verifica della CI/CD.
 - [ ] Allineare procedura e roadmap ai risultati effettivi; trasferire le
   decisioni ancora utili dal design nella documentazione stabile.
 - [ ] Rimuovere questo piano quando procedura e roadmap sono complete;
