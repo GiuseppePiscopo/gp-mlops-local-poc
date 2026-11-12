@@ -406,8 +406,7 @@ git fetch github
 git switch -c feature/pr-trigger-check-1 --no-track github/main
 
 Add-Content .\training\src\random_forest\train.py "`n# trigger check nr 1"
-git add .\training\src\random_forest\train.py
-git commit -m "chore(ci-cd): verifica scenario con PR e merge nr 1"
+git commit -am "chore(ci-cd): verifica scenario con PR e merge nr 1"
 
 git push --set-upstream github feature/pr-trigger-check-1
 
@@ -459,4 +458,98 @@ locale dello scenario:
 git switch main
 git pull --ff-only github main
 git branch -D feature/pr-trigger-check-1
+```
+
+## Verificare una PR regressiva
+
+In MLflow, annotare le versioni degli alias `candidate`, `champion` e
+`baseline`. Annotare anche la versione indicata dall'InferenceService.
+
+Creare un branch da `github/main` e ridurre temporaneamente i parametri del
+training nel workflow. Aprire la PR dallo stesso repository con l'account
+`GiuseppePiscopo`.
+
+```powershell
+git fetch github
+
+git switch -c experiment/tune-model-1 --no-track github/main
+
+(Get-Content .\.github\workflows\ml-pipeline.yml) `
+  -replace '--n-estimators 100', '--n-estimators 1' `
+  -replace '--max-depth 10', '--max-depth 1' |
+  Set-Content .\.github\workflows\ml-pipeline.yml
+
+git commit -am "test(ci-cd): degrada intenzionalmente il modello"
+
+git push --set-upstream github experiment/tune-model-1
+
+gh pr create --repo GiuseppePiscopo/gp-mlops-local-poc --base main --head experiment/tune-model-1 --title "Verifica gate regressivo" --body "Verifica il rifiuto del candidato e il ripristino sulla stessa PR."
+```
+
+In **Actions**, aprire la run `pull_request` del branch e attendere il
+completamento. Verificare che **Train and evaluate** fallisca al passo
+**Evaluate candidate** e che il Summary riporti **Relative evaluation** con
+`Passed` uguale a `False`.
+
+Scaricare `training-evaluation-<run ID GitHub>-<run attempt>` e verificare
+che contenga i tre JSON:
+
+- `training-result.json`;
+- `evaluation-report.json`, con RMSE candidato maggiore del RMSE champion e
+  `passed` uguale a `false`;
+- `execution.json`, con `evaluation_passed` uguale a `false` e senza
+  `registered_model` o `model_version`.
+
+Verificare che il run MLflow riporti `evaluation.passed` uguale a `false`, che
+non sia stata creata una nuova Model Version e che gli alias e la versione
+dell'InferenceService siano invariati. Se il gate passa, non eseguire il merge.
+
+## Correggere una PR regressiva
+
+Correggere gli stessi parametri nella stessa PR:
+
+```powershell
+(Get-Content .\.github\workflows\ml-pipeline.yml) `
+  -replace '--n-estimators 1', '--n-estimators 100' `
+  -replace '--max-depth 1', '--max-depth 10' |
+  Set-Content .\.github\workflows\ml-pipeline.yml
+
+git commit -am "fix(ci-cd): ripristina i parametri del modello"
+
+git push github experiment/tune-model-1
+```
+
+Attendere la nuova run `pull_request` del branch. Verificare che
+**Train and evaluate** termini con successo, che **Relative evaluation**
+riporti `Passed` uguale a `True` e che la PR non esegua registrazione o deploy.
+
+Scaricare l'artifact della nuova run e verificare i tre JSON. In
+`evaluation-report.json`, controllare che `passed` sia `true` e che i
+riferimenti del candidato coincidano con `training-result.json`. Confrontare
+`champion` e i checksum del test set con quelli del report della run regressiva.
+In `execution.json`, controllare il run ID GitHub, l'attempt, il commit e
+`evaluation_passed` uguale a `true`, senza `registered_model` o
+`model_version`. Verificare che gli alias e la versione dell'InferenceService
+siano ancora invariati.
+
+Eseguire il merge:
+
+```powershell
+gh pr merge experiment/tune-model-1 --repo GiuseppePiscopo/gp-mlops-local-poc --squash --delete-branch
+```
+
+Attendere il nuovo run `push` su `main`.
+
+Verificare il superamento del gate, la registrazione della nuova versione
+`candidate` e l'attesa dell'approvazione per `production`. Completare le
+verifiche e l'approvazione indicate in
+[Approvare e applicare il deployment](#approvare-e-applicare-il-deployment).
+
+A deployment completato, sincronizzare `main` locale e rimuovere il branch
+locale dello scenario:
+
+```powershell
+git switch main
+git pull --ff-only github main
+git branch -D experiment/tune-model-1
 ```
